@@ -55,10 +55,14 @@ Useful if you want faster reload cycles while developing.
    .venv/bin/pip install -r requirements.txt
    ```
 
-3. Copy the local env file (points at `localhost` instead of Docker service names):
+3. Create a `.env.local` file (points at `localhost` instead of Docker service names):
 
-   ```bash
-   cp .env.local.example .env.local   # if you don't already have .env.local
+   ```
+   DATABASE_URL=postgresql://travel:travel@localhost:5433/travel_planner
+   REDIS_URL=redis://localhost:6380/0
+   JWT_SECRET_KEY=change-me-to-a-long-random-value
+   JWT_ALGORITHM=HS256
+   ACCESS_TOKEN_EXPIRE_MINUTES=30
    ```
 
 4. Run the app, telling it to load `.env.local`:
@@ -78,7 +82,15 @@ Useful if you want faster reload cycles while developing.
 
 ## Environment variables
 
-Copy `.env.example` to `.env` (used by Docker) and adjust as needed:
+Create a `.env` file (used by Docker) with the following, adjusting as needed:
+
+```
+DATABASE_URL=postgresql://travel:travel@db:5432/travel_planner
+REDIS_URL=redis://redis:6379/0
+JWT_SECRET_KEY=change-me-to-a-long-random-value
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+```
 
 | Variable | Description |
 |---|---|
