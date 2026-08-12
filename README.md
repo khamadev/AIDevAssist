@@ -55,38 +55,27 @@ Useful if you want faster reload cycles while developing.
    .venv/bin/pip install -r requirements.txt
    ```
 
-3. Create a `.env.local` file (points at `localhost` instead of Docker service names):
-
-   ```
-   DATABASE_URL=postgresql://travel:travel@localhost:5433/travel_planner
-   REDIS_URL=redis://localhost:6380/0
-   JWT_SECRET_KEY=change-me-to-a-long-random-value
-   JWT_ALGORITHM=HS256
-   ACCESS_TOKEN_EXPIRE_MINUTES=30
-   ```
-
-4. Run the app, telling it to load `.env.local`:
+3. Run the app:
 
    Windows (PowerShell):
    ```powershell
-   $env:ENV_FILE = ".env.local"
    .venv\Scripts\uvicorn app.main:app --reload --port 8001
    ```
 
    macOS/Linux:
    ```bash
-   ENV_FILE=.env.local .venv/bin/uvicorn app.main:app --reload --port 8001
+   .venv/bin/uvicorn app.main:app --reload --port 8001
    ```
 
-5. Open `http://127.0.0.1:8001/`.
+4. Open `http://127.0.0.1:8001/`.
 
 ## Environment variables
 
-Create a `.env` file (used by Docker) with the following, adjusting as needed:
+Create a single `.env` file in the project root:
 
 ```
-DATABASE_URL=postgresql://travel:travel@db:5432/travel_planner
-REDIS_URL=redis://redis:6379/0
+DATABASE_URL=postgresql://travel:travel@localhost:5433/travel_planner
+REDIS_URL=redis://localhost:6380/0
 JWT_SECRET_KEY=change-me-to-a-long-random-value
 JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
@@ -100,7 +89,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES=30
 | `JWT_ALGORITHM` | JWT signing algorithm (default `HS256`) |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | How long login tokens stay valid |
 
-For local (non-Docker) runs, use a separate `.env.local` with `localhost`-based URLs instead of Docker service names — see `ENV_FILE` usage above.
+These are the `localhost`-based values used for local (non-Docker) runs and for `pytest`. When the app runs *inside* Docker (`docker compose up --build`), `docker-compose.yml` overrides `DATABASE_URL`/`REDIS_URL` on the `app` service to point at the internal `db`/`redis` hostnames instead — so this one `.env` file works for both cases without editing anything.
 
 ## Running tests
 
