@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trip Details — Travel Planner</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+</head>
+<body>
+  <header>
+    <a class="brand" href="/static/dashboard.html"><span class="logo-mark">🧭</span> Travel Planner</a>
+    <button class="secondary" id="logout-btn">Log out</button>
+  </header>
+
+  <main>
+    <a class="back-link" href="/static/dashboard.html">&larr; Back to trips</a>
+
+    <div class="trip-hero">
+      <div class="banner" id="trip-banner">
+        <div>
+          <h1 id="trip-title">Loading...</h1>
+          <div class="dates" id="trip-dates"></div>
+        </div>
+      </div>
+      <div class="stats">
+        <div class="stat">
+          <div class="value" id="stat-duration">-</div>
+          <div class="label">Days</div>
+        </div>
+        <div class="stat">
+          <div class="value" id="stat-countdown">-</div>
+          <div class="label">Countdown</div>
+        </div>
+        <div class="stat">
+          <div class="value" id="stat-items">-</div>
+          <div class="label">Planned items</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="map"></div>
+
+    <div class="card">
+      <h2>Add Itinerary Item</h2>
+      <form id="item-form">
+        <label for="title">Title</label>
+        <input type="text" id="title" placeholder="e.g. Visit the old town" required />
+
+        <label for="day">Day</label>
+        <input type="date" id="day" required />
+
+        <button type="submit">Add item</button>
+      </form>
+      <p id="form-error" class="error"></p>
+    </div>
+
+    <div class="card">
+      <h2>Itinerary</h2>
+      <div id="items-list"><p class="muted">Loading...</p></div>
+    </div>
+  </main>
+
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/ui.js"></script>
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+  <script>
+    requireAuth();
+
+    document.getElementById("logout-btn").addEventListener("click", logout);
+
+    const params = new URLSearchParams(window.location.search);
+    const tripId = params.get("id");
+
+    if (!tripId) {
+      window.location.href = "/static/dashboard.html";
+    }
+
+    let map;
+
+    function initMap() {
+      map = L.map("map").setView([20, 0], 2);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors",
+        maxZoom: 18,
+      }).addTo(map);
+    }
+
+    async function geocodeAndShow(destination) {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(destination)}`
+        );
+        const results = await res.json();
+        if (results.length === 0) return;
+
+        const { lat, lon } = results[0];
+        map.setView([lat, lon], 11);
+        L.marker([lat, lon]).addTo(map).bindPopup(destination).openPopup();
+      } catch (err) {
+        console.warn("Could not geocode destination", err);
+      }
+    }
+
+    async function loadTrip() {
+      const response = await apiFetch(`/trips/${tripId}`);
+      if (!response) return;
+
+      if (!response.ok) {
+        window.location.href = "/static/dashboard.html";
+        return;
+      }
+
+      const trip = await response.json();
+      document.getElementById("trip-title").textContent = trip.destination;
+      document.getElementById("trip-dates").textContent = formatDateRange(trip.start_date, trip.end_date);
+      document.getElementById("trip-banner").style.background = destinationCover(trip.destination);
+      document.getElementById("stat-duration").textContent = tripDurationDays(trip.start_date, trip.end_date);
+
+      const diff = daysUntil(trip.start_date);
+      document.getElementById("stat-countdown").textContent =
+        diff > 0 ? `${diff}d` : diff === 0 ? "Today" : "Started";
+
+      geocodeAndShow(trip.destination);
+    }
+
+    async function loadItems() {
+      const listEl = document.getElementById("items-list");
+      const response = await apiFetch(`/trips/${tripId}/itinerary`);
+      if (!response) return;
+
+      const items = await response.json();
+      document.getElementById("stat-items").textContent = items.length;
+
+      if (items.length === 0) {
+        listEl.innerHTML = `
+          <div class="empty-state">
+            <div class="icon">📋</div>
+            <p>No itinerary items yet. Add your first one above.</p>
+          </div>`;
+        return;
+      }
+
+      const byDay = {};
+      for (const item of items) {
+        (byDay[item.day] ||= []).push(item);
+      }
+      const sortedDays = Object.keys(byDay).sort();
+
+      listEl.innerHTML = `<div class="timeline">${sortedDays
+        .map(
+          (day) => `
+        <div class="timeline-day">
+          <div class="timeline-day-label">${new Date(day).toLocaleDateString(undefined, {
+            weekday: "short",
+            month: "short",
+            day: "numeric",
+          })}</div>
+          ${byDay[day]
+            .map((item) => `<div class="timeline-item">${item.title}</div>`)
+            .join("")}
+        </div>`
+        )
+        .join("")}</div>`;
+    }
+
+    document.getElementById("item-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const errorEl = document.getElementById("form-error");
+      errorEl.textContent = "";
+
+      const payload = {
+        title: document.getElementById("title").value,
+        day: document.getElementById("day").value,
+      };
+
+      const response = await apiFetch(`/trips/${tripId}/itinerary`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response) return;
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        const detail = Array.isArray(data.detail)
+          ? data.detail.map((d) => d.msg).join(", ")
+          : data.detail;
+        errorEl.textContent = detail || "Could not add item";
+        return;
+      }
+
+      document.getElementById("item-form").reset();
+      loadItems();
+    });
+
+    initMap();
+    loadTrip();
+    loadItems();
+  </script>
+</body>
+</html>
