@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Installed by ai-test-tool's `init` command. Do not edit directly —
+# edit ai_test_tool/hooks/post-commit.template instead and re-run init.
+cd "$(git rev-parse --show-toplevel)"
+PYTHONPATH="ai-test-tool" python -m ai_test_tool.cli orchestrate --stage post-commit --target .

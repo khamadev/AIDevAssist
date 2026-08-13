@@ -20,6 +20,9 @@ services:
   app:
     build: .
     env_file: .env
+    environment:
+      DATABASE_URL: postgresql://travel:travel@db:5432/travel_planner
+      REDIS_URL: redis://redis:6379/0
     depends_on:
       - db
       - redis
