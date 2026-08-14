@@ -84,3 +84,22 @@ README.md | Bin 4054 -> 4006 bytes
  1 file changed, 0 insertions(+), 0 deletions(-)
 ```
 
+## Fri Aug 14 09:10:17 2026 +0300 — Update .gitignore
+- Commit: `beb4514`
+- Author: MuhdKhamarullah
+- Changes:
+```
+.gitignore   |  1 +
+ CHANGELOG.md | 69 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 70 insertions(+)
+```
+
+## Fri Aug 14 09:48:21 2026 +0300 — Stop tracking .env.local, already covered by .gitignore
+- Commit: `becda60`
+- Author: MuhdKhamarullah
+- Changes:
+```
+.env.local | 5 -----
+ 1 file changed, 5 deletions(-)
+```
+
