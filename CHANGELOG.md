@@ -134,3 +134,27 @@ CHANGELOG.md                                    |  17 ++
  6 files changed, 408 insertions(+), 4 deletions(-)
 ```
 
+## Fri Aug 14 10:36:31 2026 +0300 — Extend reliability: multi-file verification, hallucination detection; harden notification watcher (exclude .venv/etc, debounce)
+- Commit: `98103a1`
+- Author: MuhdKhamarullah
+- Changes:
+```
+CHANGELOG.md                                       |  14 +++
+ ai-test-tool/.claude/agents/notification.md        |  18 ++-
+ ai-test-tool/.claude/agents/reliability.md         |  31 +++--
+ ai-test-tool/README.md                             |   7 +-
+ ai-test-tool/ai_test_tool/agents/contracts.py      |  20 ++-
+ ai-test-tool/ai_test_tool/agents/documentation.py  |  20 +--
+ ai-test-tool/ai_test_tool/agents/reliability.py    | 139 +++++++++++++++------
+ ai-test-tool/ai_test_tool/cli.py                   |  62 +++++++--
+ ai-test-tool/ai_test_tool/exclusions.py            |  22 ++++
+ ai-test-tool/ai_test_tool/hooks/install.py         |  33 ++++-
+ .../ai_test_tool/hooks/post-merge.template         |  10 ++
+ ai-test-tool/ai_test_tool/orchestrator.py          |  23 +++-
+ ai-test-tool/tests/test_cli_watch.py               |  61 +++++++++
+ ai-test-tool/tests/test_hooks_install.py           |  54 ++++++++
+ ai-test-tool/tests/test_orchestrator.py            |  55 ++++++++
+ ai-test-tool/tests/test_reliability.py             |  96 ++++++++++++++
+ 16 files changed, 582 insertions(+), 83 deletions(-)
+```
+
