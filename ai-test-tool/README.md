@@ -19,8 +19,11 @@ different AI tools (Copilot, ChatGPT) and plug in separately — see
 - **Notification/UX agent** (`ai_test_tool/agents/notification.py`) —
   re-runs the test suite on every file save and prints an immediate
   pass/fail notification, so a developer finds out before they ever commit.
-- **Hooks** (`ai_test_tool/hooks/`) — `pre-commit`/`post-commit`/`pre-push`
-  templates that call back into this tool, plus an installer.
+- **Hooks** (`ai_test_tool/hooks/`) — `pre-commit`/`post-commit`/`pre-push`/
+  `post-merge` templates that call back into this tool, plus an installer.
+  `post-merge` matters specifically for PRs merged on GitHub's web UI —
+  that happens server-side, so a plain `git pull` afterward wouldn't
+  otherwise trigger `post-commit`/documentation logging at all.
 
 ## Setup
 

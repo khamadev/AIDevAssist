@@ -5,6 +5,7 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
+from ..exclusions import is_excluded
 from .contracts import AgentReport
 
 CHANGELOG_FILENAME = "CHANGELOG.md"
@@ -149,27 +150,12 @@ def _append_to_changelog(target_path: Path, entry: str) -> None:
     changelog_path.write_text(existing + entry + "\n", encoding="utf-8")
 
 
-_EXCLUDED_DIR_NAMES = {
-    ".venv",
-    "venv",
-    "__pycache__",
-    "site-packages",
-    ".git",
-    "ai-test-tool",
-    "node_modules",
-}
-
-
-def _is_excluded(py_file: Path) -> bool:
-    return any(part in _EXCLUDED_DIR_NAMES for part in py_file.parts)
-
-
 def _count_functions_and_tests(target_path: Path) -> tuple[int, int]:
     import ast
 
     function_count = 0
     for py_file in target_path.rglob("*.py"):
-        if _is_excluded(py_file) or py_file.name.startswith("test_"):
+        if is_excluded(py_file) or py_file.name.startswith("test_"):
             continue
         try:
             tree = ast.parse(py_file.read_text(encoding="utf-8"))
@@ -181,7 +167,7 @@ def _count_functions_and_tests(target_path: Path) -> tuple[int, int]:
 
     test_count = 0
     for py_file in target_path.rglob("test_*.py"):
-        if _is_excluded(py_file):
+        if is_excluded(py_file):
             continue
         try:
             tree = ast.parse(py_file.read_text(encoding="utf-8"))

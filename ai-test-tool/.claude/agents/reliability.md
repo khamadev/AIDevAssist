@@ -14,22 +14,33 @@ application code, or modify the test yourself.
   stage: str, **context) -> dict` and registered for the `pre-commit` stage
   (after test-maintenance, since it judges test-maintenance's output) and
   the `pre-push` stage (as a final full-suite gate).
-- Only ever verify a test that's actually part of the current change:
-  an explicit path passed in, a `generated_test_path` from a
-  test-maintenance result earlier in the same dispatch, or (as a last
-  resort) a test file that's staged for the current commit. **Never**
-  fall back to "the newest test file anywhere in the repo" or similar —
-  that grades unrelated, pre-existing files on every commit/push and
-  blocks work that has nothing to do with a freshly generated test. If
-  none of the above apply, no-op (`passed: True`, nothing to check) —
-  don't guess.
+- Only ever verify test(s) that are actually part of the current change:
+  an explicit path passed in, `generated_test_path`/`generated_test_paths`
+  from a test-maintenance result earlier in the same dispatch, or (as a
+  last resort) whatever test file(s) are staged for the current commit —
+  **all** of them, not just one, since a single commit can introduce or
+  update more than one test. **Never** fall back to "the newest test file
+  anywhere in the repo" or similar — that grades unrelated, pre-existing
+  files on every commit/push and blocks work that has nothing to do with a
+  freshly generated test. If none of the above apply, no-op (`passed:
+  True`, nothing to check) — don't guess.
 - For each test under review: read the test and the application code it
   targets, execute the test for real (never judge by reading alone — a
   test must actually be run to be trusted), and check whether it passes
   for the correct reason rather than trivially.
 - Watch specifically for: assertions that can't fail (e.g. `assert True`),
   tests that don't exercise the behavior they claim to, and hallucinated
-  functions/values/behavior that don't match the real code.
+  functions/values/behavior that don't match the real code — the latter is
+  detected by scanning failed-test output for markers like
+  `ModuleNotFoundError`/`ImportError`/`AttributeError`/`NameError`
+  (`is_hallucinated` in the result), which is reported distinctly from a
+  legitimate assertion failure since the two call for different fixes (the
+  test references something that never existed, vs. the behavior it
+  checked for is genuinely wrong).
+- When more than one test is verified in a single run, top-level fields
+  are an aggregate (worst classification wins; `is_compliant` is true only
+  if every file is) and the full per-file breakdown is in `details.files`
+  — see `_aggregate` in `reliability.py`.
 - Classify each test as one of:
   - **Reliable** — correctly checks the intended behavior.
   - **Needs improvement** — works, but has weak or missing coverage.

@@ -62,3 +62,58 @@ def test_bootstrap_is_idempotent():
     orchestrator.bootstrap()
     orchestrator.bootstrap()
     assert len(orchestrator.AGENT_REGISTRY["post-commit"]) == 1
+
+
+def test_bootstrap_picks_up_reliability_plugin():
+    orchestrator.bootstrap()
+    assert len(orchestrator.AGENT_REGISTRY["pre-commit"]) >= 1
+    assert len(orchestrator.AGENT_REGISTRY["pre-push"]) >= 1
+
+
+def test_dispatch_does_not_crash_when_an_agent_raises():
+    def broken_agent(target, stage, **context):
+        raise RuntimeError("boom")
+
+    orchestrator.register("pre-commit", broken_agent)
+    results = orchestrator.dispatch("pre-commit", target=".")
+
+    assert len(results) == 1
+    assert results[0]["agent"] == "test_orchestrator"
+    assert "boom" in results[0]["summary"]
+    # A crash is reported distinctly from a real failed finding — must not
+    # be treated the same as `passed: False`, which would block commits.
+    assert results[0]["passed"] is None
+
+
+def test_dispatch_continues_running_later_agents_after_a_crash():
+    order = []
+
+    def broken_agent(target, stage, **context):
+        order.append("broken")
+        raise RuntimeError("boom")
+
+    def later_agent(target, stage, **context):
+        order.append("later")
+        return {"agent": "later", "stage": stage, "summary": "ok", "passed": True}
+
+    orchestrator.register("pre-commit", broken_agent)
+    orchestrator.register("pre-commit", later_agent)
+    results = orchestrator.dispatch("pre-commit", target=".")
+
+    assert order == ["broken", "later"]
+    assert len(results) == 2
+    assert results[1]["agent"] == "later"
+
+
+def test_crash_report_does_not_count_as_a_blocking_failure():
+    """Mirrors cli.py's `failed = any(r.get('passed') is False ...)` check —
+    a crash (passed: None) must not be conflated with a real failure."""
+
+    def broken_agent(target, stage, **context):
+        raise RuntimeError("boom")
+
+    orchestrator.register("pre-commit", broken_agent)
+    results = orchestrator.dispatch("pre-commit", target=".")
+
+    failed = any(r.get("passed") is False for r in results)
+    assert failed is False

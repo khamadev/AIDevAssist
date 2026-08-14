@@ -120,3 +120,17 @@ README.md | Bin 4054 -> 4006 bytes
  9 files changed, 78 insertions(+), 37 deletions(-)
 ```
 
+## Fri Aug 14 10:06:20 2026 +0300 — Fix reliability agent blocking unrelated commits; implement with EU AI Act Art. 50 check
+- Commit: `52f8633`
+- Author: MuhdKhamarullah
+- Changes:
+```
+CHANGELOG.md                                    |  17 ++
+ ai-test-tool/.claude/agents/reliability.md      |  19 +++
+ ai-test-tool/ai_test_tool/agents/contracts.py   |   3 +
+ ai-test-tool/ai_test_tool/agents/plugins.py     |  11 +-
+ ai-test-tool/ai_test_tool/agents/reliability.py | 204 ++++++++++++++++++++++++
+ ai-test-tool/tests/test_reliability.py          | 158 ++++++++++++++++++
+ 6 files changed, 408 insertions(+), 4 deletions(-)
+```
+

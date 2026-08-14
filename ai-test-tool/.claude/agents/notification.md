@@ -16,12 +16,18 @@ the earliest possible moment.
   for the `on-save` stage.
 - Own the `watch` command in `cli.py`, which uses a filesystem watcher
   (`watchdog`) to detect file saves in the target repo and dispatch the
-  `on-save` stage for each one.
-- On each save, run the relevant tests (initially: the full suite is
-  acceptable for a v1; scoping to just the tests relevant to the changed
-  file is a worthwhile improvement once time allows) and print a clear,
-  human-readable pass/fail notification to the terminal the watcher is
-  running in.
+  `on-save` stage for each one. `_schedule_watches` deliberately skips
+  excluded directories (`.venv/`, `ai-test-tool/`, `__pycache__/`, `.git/`
+  — see `exclusions.py`) entirely rather than watching everything and
+  filtering after the fact; those directories can contain thousands of
+  files and placing OS-level watches on them wastes resources for no
+  benefit. `_should_dispatch` debounces rapid-fire duplicate save events
+  from the OS/editor (`WATCH_DEBOUNCE_SECONDS`) so one save doesn't trigger
+  multiple redundant test runs.
+- On each save, run the relevant tests (currently: the full suite; scoping
+  to just the tests relevant to the changed file is still a worthwhile
+  improvement, not yet done) and print a clear, human-readable pass/fail
+  notification to the terminal the watcher is running in.
 - Treat pytest exit code 5 ("no tests collected") as a neutral, non-failing
   state — the point is to catch regressions, not to nag about missing
   coverage (that's the test-maintenance agent's concern).
