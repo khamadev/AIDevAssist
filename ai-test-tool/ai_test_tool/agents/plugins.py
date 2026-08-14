@@ -1,7 +1,11 @@
 """Extension point for teammates' agents (test-maintenance, reliability).
 
-These agents live in different AI tools (Copilot, ChatGPT) and are not part
-of this initial scaffold. To plug one in:
+`reliability.py` is implemented (see `.claude/agents/reliability.md` for its
+spec). `test_maintenance.py` is still owned by a teammate using Copilot and
+isn't in this repo yet — until it lands, `_load_test_maintenance()` below
+fails gracefully (does nothing).
+
+To plug a new agent in:
 
 1. Add a module here, e.g. `ai_test_tool/agents/test_maintenance.py`, that
    exposes `run(target: str, stage: str, **context) -> dict` matching the
@@ -9,8 +13,7 @@ of this initial scaffold. To plug one in:
 2. Register it below, against the stage(s) it should run for.
 
 Nothing else in the orchestrator needs to change — this is the one file
-that couples the orchestrator to teammate-provided code, and it fails
-gracefully (does nothing) if a module hasn't been added yet.
+that couples the orchestrator to teammate-provided code.
 """
 
 from .. import orchestrator

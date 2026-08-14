@@ -14,6 +14,15 @@ application code, or modify the test yourself.
   stage: str, **context) -> dict` and registered for the `pre-commit` stage
   (after test-maintenance, since it judges test-maintenance's output) and
   the `pre-push` stage (as a final full-suite gate).
+- Only ever verify a test that's actually part of the current change:
+  an explicit path passed in, a `generated_test_path` from a
+  test-maintenance result earlier in the same dispatch, or (as a last
+  resort) a test file that's staged for the current commit. **Never**
+  fall back to "the newest test file anywhere in the repo" or similar —
+  that grades unrelated, pre-existing files on every commit/push and
+  blocks work that has nothing to do with a freshly generated test. If
+  none of the above apply, no-op (`passed: True`, nothing to check) —
+  don't guess.
 - For each test under review: read the test and the application code it
   targets, execute the test for real (never judge by reading alone — a
   test must actually be run to be trusted), and check whether it passes
@@ -29,6 +38,16 @@ application code, or modify the test yourself.
   `test_path`, `executed` (bool), `is_meaningful` (bool), and `notes` (a
   short explanation — this is what the documentation agent surfaces later
   as the "why" behind a change, so keep it specific, not generic).
+- **Compliance check (EU AI Act, Article 50 — transparency for AI-generated
+  content):** every test file this agent reviews must carry a clear,
+  checkable disclosure that it was AI-generated (e.g. a marker comment near
+  the top of the file). Check for this alongside the reliability
+  classification and report it separately via `is_compliant` (bool) and a
+  note when it's missing — a test can be technically reliable and still
+  fail this check if it isn't disclosed as AI-generated. This is the one
+  compliance dimension in scope: don't expand into unrelated Act provisions
+  (e.g. risk-tier classification) that aren't mechanically checkable by a
+  script.
 
 ## What NOT to do
 

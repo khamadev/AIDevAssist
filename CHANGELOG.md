@@ -103,3 +103,20 @@ README.md | Bin 4054 -> 4006 bytes
  1 file changed, 5 deletions(-)
 ```
 
+## Fri Aug 14 09:56:00 2026 +0300 — Add Claude Code reliability agent spec, untrack egg-info build artifacts
+- Commit: `f40b8f4`
+- Author: MuhdKhamarullah
+- Changes:
+```
+.gitignore                                         |  1 +
+ CHANGELOG.md                                       | 19 +++++++
+ ai-test-tool/.claude/agents/reliability.md         | 58 ++++++++++++++++++++++
+ ai-test-tool/ai_test_tool.egg-info/PKG-INFO        |  8 ---
+ ai-test-tool/ai_test_tool.egg-info/SOURCES.txt     | 21 --------
+ .../ai_test_tool.egg-info/dependency_links.txt     |  1 -
+ .../ai_test_tool.egg-info/entry_points.txt         |  2 -
+ ai-test-tool/ai_test_tool.egg-info/requires.txt    |  4 --
+ ai-test-tool/ai_test_tool.egg-info/top_level.txt   |  1 -
+ 9 files changed, 78 insertions(+), 37 deletions(-)
+```
+

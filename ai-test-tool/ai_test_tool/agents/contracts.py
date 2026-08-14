@@ -57,4 +57,7 @@ class ReliabilityResult:
     test_path: str
     executed: bool
     is_meaningful: bool
+    classification: Literal["reliable", "needs_improvement", "not_reliable"]
+    # EU AI Act, Article 50 — was this AI-generated test disclosed as such?
+    is_compliant: bool
     notes: str = ""
