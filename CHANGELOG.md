@@ -158,3 +158,14 @@ CHANGELOG.md                                       |  14 +++
  16 files changed, 582 insertions(+), 83 deletions(-)
 ```
 
+## Fri Aug 14 10:52:06 2026 +0300 — Scope Copilot instructions to ai-test-tool/, fix .NET-vs-Python framework mismatch
+- Commit: `74e01b2`
+- Author: MuhdKhamarullah
+- Changes:
+```
+.github/copilot-instructions.md                    | 16 -------
+ .../instructions/test-maintenance.instructions.md  | 51 ++++++++++++++++++++++
+ CHANGELOG.md                                       | 24 ++++++++++
+ 3 files changed, 75 insertions(+), 16 deletions(-)
+```
+
