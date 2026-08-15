@@ -6,10 +6,9 @@ A simple travel planner web app — register, create trips, and build a day-by-d
 
 ## Prerequisites
 
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (recommended path), **or**
-- Python 3.12+ if running locally without Docker
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 
-## Option 1: Run entirely in Docker (recommended)
+## Running the app
 
 From the project root:
 
@@ -17,7 +16,7 @@ From the project root:
 docker compose up --build
 ```
 
-This starts the app, PostgreSQL, and Redis together. Once it's up, open:
+This starts the app, PostgreSQL, and Redis together — no additional setup required. Once it's up, open:
 
 ```
 http://127.0.0.1:8080/
@@ -29,75 +28,25 @@ To stop everything:
 docker compose down
 ```
 
-## Option 2: Run the app locally, with only the databases in Docker
-
-Useful if you want faster reload cycles while developing.
-
-1. Start just Postgres and Redis:
-
-   ```bash
-   docker compose up -d db redis
-   ```
-
-2. Create a virtual environment and install dependencies:
-
-   ```bash
-   python -m venv .venv
-   ```
-
-   Windows (PowerShell):
-   ```powershell
-   .venv\Scripts\pip install -r requirements.txt
-   ```
-
-   macOS/Linux:
-   ```bash
-   .venv/bin/pip install -r requirements.txt
-   ```
-
-3. Copy the local env file (points at `localhost` instead of Docker service names):
-
-   ```bash
-   cp .env.local.example .env.local   # if you don't already have .env.local
-   ```
-
-4. Run the app, telling it to load `.env.local`:
-
-   Windows (PowerShell):
-   ```powershell
-   $env:ENV_FILE = ".env.local"
-   .venv\Scripts\uvicorn app.main:app --reload --port 8001
-   ```
-
-   macOS/Linux:
-   ```bash
-   ENV_FILE=.env.local .venv/bin/uvicorn app.main:app --reload --port 8001
-   ```
-
-5. Open `http://127.0.0.1:8001/`.
-
-## Environment variables
-
-Copy `.env.example` to `.env` (used by Docker) and adjust as needed:
-
-| Variable | Description |
-|---|---|
-| `DATABASE_URL` | PostgreSQL connection string |
-| `REDIS_URL` | Redis connection string (used for JWT logout/blacklist) |
-| `JWT_SECRET_KEY` | Secret used to sign auth tokens — change this for any real deployment |
-| `JWT_ALGORITHM` | JWT signing algorithm (default `HS256`) |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | How long login tokens stay valid |
-
-For local (non-Docker) runs, use a separate `.env.local` with `localhost`-based URLs instead of Docker service names — see `ENV_FILE` usage above.
-
 ## Running tests
 
+Tests run locally (outside Docker) against the pure business logic in `app/trip_logic.py`, which doesn't require the database or Redis:
+
 ```bash
-.venv/bin/pytest -q      # macOS/Linux
-.venv\Scripts\pytest -q  # Windows
+python -m venv .venv
 ```
 
-Tests cover the pure business logic in `app/trip_logic.py` and don't require the database or Redis to be running.
+Windows (PowerShell):
+```powershell
+.venv\Scripts\pip install -r requirements.txt
+.venv\Scripts\pytest -q
+```
+
+macOS/Linux:
+```bash
+.venv/bin/pip install -r requirements.txt
+.venv/bin/pytest -q
+```
 
 ## Project structure
 
