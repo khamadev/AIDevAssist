@@ -56,6 +56,12 @@ def _run_orchestrate(stage: str, target: str, changed_file: str | None) -> None:
 
     for result in results:
         print(f"[{result['agent']}] {result['summary']}")
+        # A summary can read as positive ("2/2 tests reliable") while the
+        # commit is still blocked for an unrelated reason (e.g. a
+        # compliance check, not a reliability one) — always show *why*
+        # when passed is False, don't make the developer go dig for it.
+        if result.get("passed") is False:
+            _print_failure_reason(result)
 
     if stage == "pre-commit":
         _stage_generated_files(target, results)
@@ -64,6 +70,20 @@ def _run_orchestrate(stage: str, target: str, changed_file: str | None) -> None:
 
     failed = any(r.get("passed") is False for r in results)
     sys.exit(1 if failed else 0)
+
+
+def _print_failure_reason(result: dict) -> None:
+    details = result.get("details", {})
+    files = details.get("files")
+    printed = False
+    if files:
+        for file_detail in files:
+            notes = file_detail.get("notes")
+            if notes:
+                print(f"    - {file_detail.get('test_path', '?')}: {notes}")
+                printed = True
+    if not printed and details.get("notes"):
+        print(f"    - {details['notes']}")
 
 
 def _stage_generated_files(target: str, results: list[dict]) -> None:

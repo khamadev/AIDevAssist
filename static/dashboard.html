@@ -8,7 +8,7 @@
 </head>
 <body>
   <header>
-    <a class="brand" href="/static/dashboard.html"><span class="logo-mark">🧭</span> Travel Planner</a>
+    <a class="brand" href="/static/dashboard.html"><span class="logo-mark">TP</span> Travel Planner</a>
     <button type="button" class="secondary" id="logout-btn">Log out</button>
   </header>
 
@@ -36,14 +36,13 @@
     </div>
 
     <div class="toolbar">
-      <h2 style="margin: 0;">My Trips</h2>
+      <h2>My Trips</h2>
       <input type="search" id="search" placeholder="Search destinations..." />
     </div>
     <div id="trips-list"><p class="muted">Loading...</p></div>
 
-    <!-- AI panel -->
-    <div id="ai-panel" class="card" style="display:none; margin-top:16px;">
-      <h3 style="margin-top:0;">AI Day Plan</h3>
+    <div id="ai-panel" class="card" style="display: none;">
+      <h3>AI Day Plan</h3>
       <p id="ai-trip-info" class="muted"></p>
 
       <div class="field-row">
@@ -57,13 +56,13 @@
         </div>
       </div>
 
-      <div class="card-actions" style="margin-top:12px;">
+      <div class="card-actions">
         <button type="button" id="ai-generate-btn">Generate</button>
         <button type="button" class="secondary" id="ai-close-btn">Close</button>
       </div>
 
       <p id="ai-error" class="error"></p>
-      <div id="ai-result" style="margin-top:12px;"></div>
+      <div id="ai-result"></div>
     </div>
   </main>
 
@@ -83,13 +82,22 @@
       renderTrips(allTrips);
     }
 
+    function initials(destination) {
+      return destination
+        .split(/[\s,]+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((word) => word[0].toUpperCase())
+        .join("");
+    }
+
     function renderTrips(trips) {
       const listEl = document.getElementById("trips-list");
 
       if (trips.length === 0) {
         listEl.innerHTML = `
           <div class="card empty-state">
-            <div class="icon">🗺️</div>
+            <div class="icon">--</div>
             <p>No trips yet. Add your first destination above.</p>
           </div>`;
         return;
@@ -102,27 +110,14 @@
           const status = tripStatus(trip.start_date, trip.end_date);
           return `
         <div class="trip-card">
-          <a class="cover" href="/static/trip.html?id=${trip.id}" style="background: ${destinationCover(trip.destination)}">✈️</a>
+          <a class="cover" href="/static/trip.html?id=${trip.id}" style="background: ${destinationCover(trip.destination)}">${initials(trip.destination)}</a>
           <div class="body">
             <a class="destination" href="/static/trip.html?id=${trip.id}">${trip.destination}</a>
             <div class="dates">${formatDateRange(trip.start_date, trip.end_date)}</div>
             <span class="badge ${status}">${tripStatusLabel(status)}</span>
-            <div class="card-actions" style="margin-top:10px; display:flex; gap:12px; align-items:center;">
-              <button
-                type="button"
-                onclick="openAiPanel(${trip.id})"
-                style="padding:12px 24px; border-radius:14px; border:1px solid transparent; background:#0f766e; color:#fff; font-weight:600;"
-              >
-                AI Plan
-              </button>
-              <button
-                type="button"
-                class="danger"
-                onclick="deleteTrip(${trip.id})"
-                style="padding:12px 24px; border-radius:14px; background:#fff; color:#6b7280; border:1px solid #d1d5db; font-weight:600;"
-              >
-                Delete
-              </button>
+            <div class="card-actions">
+              <button type="button" onclick="openAiPanel(${trip.id})">AI Plan</button>
+              <button type="button" class="danger" onclick="deleteTrip(${trip.id})">Delete</button>
             </div>
           </div>
         </div>`;
@@ -179,6 +174,7 @@
     document.getElementById("ai-generate-btn").addEventListener("click", async () => {
       const errEl = document.getElementById("ai-error");
       const resultEl = document.getElementById("ai-result");
+      const generateBtn = document.getElementById("ai-generate-btn");
       errEl.textContent = "";
       resultEl.innerHTML = "";
 
@@ -202,35 +198,52 @@
         trip_id: selectedTrip.id,
       };
 
-      const response = await apiFetch("/ai/generate-itinerary", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      generateBtn.disabled = true;
+      generateBtn.textContent = "Generating...";
 
-      if (!response) return;
+      try {
+        const response = await apiFetch("/ai/generate-itinerary", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
 
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        errEl.textContent = data.detail || "AI generation failed.";
-        return;
+        if (!response) return;
+
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          errEl.textContent = data.detail || "AI generation failed.";
+          return;
+        }
+
+        const data = await response.json();
+        const daysHtml = (data.days || [])
+          .map((d) => {
+            const itemsHtml = (d.items || [])
+              .map(
+                (it) => `
+                  <div class="ai-item">
+                    <div class="time">${it.time}</div>
+                    <div class="details">
+                      <div class="title">${it.title}</div>
+                      <div class="notes">${it.notes}</div>
+                    </div>
+                  </div>`
+              )
+              .join("");
+            return `
+              <div class="ai-day">
+                <div class="ai-day-label">Day ${d.day}</div>
+                ${itemsHtml}
+              </div>`;
+          })
+          .join("");
+
+        resultEl.innerHTML = daysHtml || "<p class='muted'>No plan generated.</p>";
+      } finally {
+        generateBtn.disabled = false;
+        generateBtn.textContent = "Generate";
       }
-
-      const data = await response.json();
-      const daysHtml = (data.days || [])
-        .map((d) => {
-          const itemsHtml = (d.items || [])
-            .map((it) => `<li><strong>${it.time}</strong> — ${it.title}<br/><span class="muted">${it.notes}</span></li>`)
-            .join("");
-          return `
-            <div class="card" style="margin:8px 0;">
-              <h4 style="margin:0 0 8px 0;">Day ${d.day}</h4>
-              <ul style="margin:0 0 0 18px;">${itemsHtml}</ul>
-            </div>`;
-        })
-        .join("");
-
-      resultEl.innerHTML = daysHtml || "<p class='muted'>No plan generated.</p>";
     });
 
     document.getElementById("trip-form").addEventListener("submit", async (event) => {

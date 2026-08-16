@@ -1,0 +1,78 @@
+import httpx
+import pytest
+
+from app.services import poi
+
+
+class _FakeResponse:
+    def __init__(self, json_data, status_code=200):
+        self._json_data = json_data
+        self.status_code = status_code
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise httpx.HTTPStatusError("error", request=None, response=self)
+
+    def json(self):
+        return self._json_data
+
+
+def test_geocode_returns_lat_lon_on_success(monkeypatch):
+    monkeypatch.setattr(
+        httpx, "get", lambda *a, **k: _FakeResponse([{"lat": "48.8566", "lon": "2.3522"}])
+    )
+
+    result = poi.geocode("Paris")
+
+    assert result == (48.8566, 2.3522)
+
+
+def test_geocode_returns_none_when_no_results(monkeypatch):
+    monkeypatch.setattr(httpx, "get", lambda *a, **k: _FakeResponse([]))
+
+    assert poi.geocode("Nowhereville") is None
+
+
+def test_geocode_returns_none_on_network_error(monkeypatch):
+    def raise_error(*a, **k):
+        raise httpx.ConnectError("no network")
+
+    monkeypatch.setattr(httpx, "get", raise_error)
+
+    assert poi.geocode("Paris") is None
+
+
+def test_geocode_returns_none_on_malformed_response(monkeypatch):
+    monkeypatch.setattr(httpx, "get", lambda *a, **k: _FakeResponse([{"unexpected": "shape"}]))
+
+    assert poi.geocode("Paris") is None
+
+
+def test_fetch_points_of_interest_categorizes_and_dedupes(monkeypatch):
+    elements = [
+        {"tags": {"name": "Louvre Museum", "tourism": "museum"}},
+        {"tags": {"name": "Cafe de Flore", "amenity": "cafe"}},
+        {"tags": {"name": "Jardin du Luxembourg", "leisure": "park"}},
+        {"tags": {"name": "Louvre Museum", "tourism": "museum"}},  # duplicate
+        {"tags": {}},  # no name, should be skipped
+    ]
+    monkeypatch.setattr(
+        httpx, "post", lambda *a, **k: _FakeResponse({"elements": elements})
+    )
+
+    results = poi.fetch_points_of_interest(48.8566, 2.3522)
+
+    assert len(results) == 3
+    by_name = {r["name"]: r["category"] for r in results}
+    assert by_name["Louvre Museum"] == "sight"
+    assert by_name["Cafe de Flore"] == "food"
+    assert by_name["Jardin du Luxembourg"] == "nature"
+
+
+def test_fetch_points_of_interest_returns_empty_list_on_error(monkeypatch):
+    def raise_error(*a, **k):
+        raise httpx.ConnectError("no network")
+
+    monkeypatch.setattr(httpx, "post", raise_error)
+
+    assert poi.fetch_points_of_interest(48.8566, 2.3522) == []

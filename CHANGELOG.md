@@ -266,3 +266,16 @@ ai-test-tool/ai_test_tool/agents/reliability.py    |  4 +-
  3 files changed, 95 insertions(+), 1 deletion(-)
 ```
 
+## Sun Aug 16 23:39:14 2026 +0300 — Merge pull request #3 from khamadev/lili
+- Commit: `9ec5636`
+- Author: khama
+- Changes:
+```
+app/main.py           |   3 +-
+ app/routes/ai.py      |  39 ++++
+ app/schemas.py        |  24 ++-
+ static/dashboard.html | 142 +++++++++++++-
+ static/style.css      | 522 +++++++++++++++++++++++++++-----------------------
+ 5 files changed, 485 insertions(+), 245 deletions(-)
+```
+

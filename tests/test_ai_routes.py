@@ -1,0 +1,105 @@
+import pytest
+from fastapi import HTTPException
+
+from app.routes import ai
+from app.routes.ai import _PoiPicker, _preferred_categories
+from app.schemas import AIGenerateRequest
+
+
+SAMPLE_POIS = [
+    {"name": "Louvre Museum", "category": "sight"},
+    {"name": "Eiffel Tower", "category": "sight"},
+    {"name": "Notre-Dame", "category": "sight"},
+    {"name": "Cafe de Flore", "category": "food"},
+    {"name": "Jardin du Luxembourg", "category": "nature"},
+]
+
+
+def test_generate_itinerary_uses_real_pois_when_available(monkeypatch):
+    monkeypatch.setattr(ai, "_find_pois", lambda destination: SAMPLE_POIS)
+
+    payload = AIGenerateRequest(destination="Paris", days=2, preferences="")
+    result = ai.generate_itinerary(payload)
+
+    assert len(result.days) == 2
+    day_one_titles = [item.title for item in result.days[0].items]
+    assert "Louvre Museum" in day_one_titles
+    assert "Cafe de Flore" in day_one_titles
+
+
+def test_generate_itinerary_does_not_repeat_a_sight_until_options_exhausted(monkeypatch):
+    monkeypatch.setattr(ai, "_find_pois", lambda destination: SAMPLE_POIS)
+
+    payload = AIGenerateRequest(destination="Paris", days=2, preferences="")
+    result = ai.generate_itinerary(payload)
+
+    day_one_morning = result.days[0].items[0].title
+    day_two_morning = result.days[1].items[0].title
+    assert day_one_morning != day_two_morning
+    assert {day_one_morning, day_two_morning}.issubset(
+        {"Louvre Museum", "Eiffel Tower", "Notre-Dame"}
+    )
+
+
+def test_generate_itinerary_falls_back_to_generic_content_when_no_pois(monkeypatch):
+    monkeypatch.setattr(ai, "_find_pois", lambda destination: [])
+
+    payload = AIGenerateRequest(destination="Nowhereville", days=1, preferences="")
+    result = ai.generate_itinerary(payload)
+
+    titles = [item.title for item in result.days[0].items]
+    assert titles == [
+        "Morning highlight in Nowhereville",
+        "Lunch experience (local food)",
+        "Evening walk / relax",
+    ]
+
+
+def test_generate_itinerary_rejects_zero_days(monkeypatch):
+    monkeypatch.setattr(ai, "_find_pois", lambda destination: [])
+    payload = AIGenerateRequest(destination="Paris", days=0, preferences="")
+
+    with pytest.raises(HTTPException) as exc_info:
+        ai.generate_itinerary(payload)
+    assert exc_info.value.status_code == 400
+
+
+def test_generate_itinerary_rejects_too_many_days(monkeypatch):
+    monkeypatch.setattr(ai, "_find_pois", lambda destination: [])
+    payload = AIGenerateRequest(destination="Paris", days=15, preferences="")
+
+    with pytest.raises(HTTPException) as exc_info:
+        ai.generate_itinerary(payload)
+    assert exc_info.value.status_code == 400
+
+
+def test_preferred_categories_detects_nature_keywords():
+    assert "nature" in _preferred_categories("hiking and outdoor nature spots")
+
+
+def test_preferred_categories_detects_food_keywords():
+    assert "food" in _preferred_categories("great restaurant and local cuisine")
+
+
+def test_preferred_categories_empty_string_yields_no_categories():
+    assert _preferred_categories("") == set()
+
+
+def test_poi_picker_rotates_without_repeating_until_exhausted():
+    picker = _PoiPicker([
+        {"name": "A", "category": "sight"},
+        {"name": "B", "category": "sight"},
+    ])
+
+    first = picker.next("sight")
+    second = picker.next("sight")
+    third = picker.next("sight")  # wraps around
+
+    assert {first, second} == {"A", "B"}
+    assert third == first
+
+
+def test_poi_picker_returns_none_for_missing_category():
+    picker = _PoiPicker([{"name": "A", "category": "sight"}])
+
+    assert picker.next("food") is None
