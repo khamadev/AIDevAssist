@@ -223,3 +223,14 @@ CHANGELOG.md                                       |  19 +++
  5 files changed, 333 insertions(+), 12 deletions(-)
 ```
 
+## Sun Aug 16 14:28:27 2026 +0300 — Fix watcher: catch atomic-save events (on_created/on_moved), use ASCII notification markers (Windows console encoding)
+- Commit: `1355b0d`
+- Author: MuhdKhamarullah
+- Changes:
+```
+CHANGELOG.md                                     | 13 ++++++++++++
+ ai-test-tool/ai_test_tool/agents/notification.py |  8 ++++++--
+ ai-test-tool/ai_test_tool/cli.py                 | 25 ++++++++++++++++++------
+ 3 files changed, 38 insertions(+), 8 deletions(-)
+```
+

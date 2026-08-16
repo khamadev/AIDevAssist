@@ -144,7 +144,19 @@ def _run_watch(target: str) -> None:
                 return
             if not _should_dispatch(last_event_time, path, time.monotonic()):
                 return
-            orchestrator.dispatch("on-save", target=str(target_path), changed_file=path)
+
+            results = orchestrator.dispatch(
+                "on-save", target=str(target_path), changed_file=path
+            )
+            # orchestrator.dispatch isolates a crashing agent so it can't
+            # take down the watcher — but if nothing here surfaces that
+            # crash, it's just as bad as a crash: the developer sees
+            # nothing print at all and has no idea the watcher stopped
+            # actually checking their save. Every result — including a
+            # crash report (passed: None) — must be visible.
+            for result in results:
+                if result.get("passed") is None:
+                    print(f"[{result['agent']}] {result['summary']}")
 
     observer = Observer()
     _schedule_watches(observer, Handler(), target_path)

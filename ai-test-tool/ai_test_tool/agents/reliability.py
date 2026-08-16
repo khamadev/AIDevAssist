@@ -8,6 +8,7 @@ human-written one.
 """
 
 import ast
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -170,6 +171,10 @@ def _execute_test(target_path: Path, test_path: Path) -> tuple[bool, bool, str]:
         cwd=target_path,
         capture_output=True,
         text=True,
+        # Without a real terminal, pytest defaults to an 80-column width
+        # and truncates output — keep it wide so hallucination-marker
+        # scanning (ModuleNotFoundError, etc.) never gets cut off.
+        env={**os.environ, "COLUMNS": "200"},
     )
     # 0 = all passed, 1 = ran but some failed — both mean it actually executed.
     executed = result.returncode in (0, 1)
