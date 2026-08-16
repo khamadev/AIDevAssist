@@ -169,3 +169,14 @@ CHANGELOG.md                                       |  14 +++
  3 files changed, 75 insertions(+), 16 deletions(-)
 ```
 
+## Fri Aug 14 10:55:10 2026 +0300 — Scope README to Docker-only; make docker-compose self-contained (no .env required)
+- Commit: `b1f5d23`
+- Author: MuhdKhamarullah
+- Changes:
+```
+CHANGELOG.md       | 11 ++++++++
+ README.md          | 82 ++++++++++--------------------------------------------
+ docker-compose.yml |  4 ++-
+ 3 files changed, 29 insertions(+), 68 deletions(-)
+```
+

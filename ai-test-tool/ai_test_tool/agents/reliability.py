@@ -215,16 +215,20 @@ def _is_trivial_assert(node: ast.Assert) -> bool:
 def _check_ai_disclosure(test_path: Path) -> tuple[bool, str]:
     """EU AI Act, Article 50: AI-generated content must be disclosed as such.
 
-    We check for a simple marker near the top of the file rather than
-    assuming compliance — absence of a marker is treated as non-compliant,
-    not as "presumably human-written."
+    Scans the whole file for a marker rather than assuming compliance —
+    absence of a marker is treated as non-compliant, not as "presumably
+    human-written." Deliberately does NOT restrict this to the first N
+    characters of the file: test-maintenance's realistic strategy is to
+    append new tests to an existing (possibly human-written) file rather
+    than rewrite its header, so the marker legitimately lands wherever the
+    generated section starts, not necessarily at the top.
     """
     try:
-        head = test_path.read_text(encoding="utf-8")[:500].lower()
+        content = test_path.read_text(encoding="utf-8").lower()
     except (OSError, UnicodeDecodeError):
         return False, "Could not read file to check AI-disclosure marker"
 
-    if any(marker in head for marker in AI_DISCLOSURE_MARKERS):
+    if any(marker in content for marker in AI_DISCLOSURE_MARKERS):
         return True, ""
     return False, "Missing AI-generated disclosure marker (EU AI Act Art. 50)"
 
