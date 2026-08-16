@@ -234,3 +234,15 @@ CHANGELOG.md                                     | 13 ++++++++++++
  3 files changed, 38 insertions(+), 8 deletions(-)
 ```
 
+## Sun Aug 16 15:21:57 2026 +0300 — Fix notification/reliability using the wrong Python interpreter â€” resolve target repo's own venv instead of the tool's
+- Commit: `a8a0c26`
+- Author: MuhdKhamarullah
+- Changes:
+```
+ai-test-tool/ai_test_tool/agents/notification.py |  4 +--
+ ai-test-tool/ai_test_tool/agents/reliability.py  |  4 +--
+ ai-test-tool/ai_test_tool/python_env.py          | 32 +++++++++++++++++++++
+ ai-test-tool/tests/test_python_env.py            | 36 ++++++++++++++++++++++++
+ 4 files changed, 72 insertions(+), 4 deletions(-)
+```
+
