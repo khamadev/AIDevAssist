@@ -180,3 +180,14 @@ CHANGELOG.md       | 11 ++++++++
  3 files changed, 29 insertions(+), 68 deletions(-)
 ```
 
+## Sun Aug 16 13:56:03 2026 +0300 — Fix AI-disclosure check to scan whole file, not just first 500 chars
+- Commit: `63b1839`
+- Author: MuhdKhamarullah
+- Changes:
+```
+CHANGELOG.md                                    | 11 +++++++++++
+ ai-test-tool/ai_test_tool/agents/reliability.py | 14 +++++++++-----
+ ai-test-tool/tests/test_reliability.py          | 22 ++++++++++++++++++++++
+ 3 files changed, 42 insertions(+), 5 deletions(-)
+```
+
