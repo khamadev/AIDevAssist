@@ -123,15 +123,28 @@ def _run_watch(target: str) -> None:
 
     class Handler(FileSystemEventHandler):
         def on_modified(self, event):
-            if event.is_directory or not event.src_path.endswith(".py"):
+            self._handle(event, event.src_path)
+
+        def on_created(self, event):
+            self._handle(event, event.src_path)
+
+        def on_moved(self, event):
+            # Many editors and tools save atomically (write to a temp file,
+            # then rename it over the original) rather than writing
+            # in-place — that produces a "moved" event on the final path,
+            # not "modified". Without this, saves from any tool using that
+            # pattern (confirmed: `sed -i`, and Claude Code's own file
+            # write) would be silently missed entirely.
+            self._handle(event, event.dest_path)
+
+        def _handle(self, event, path: str) -> None:
+            if event.is_directory or not path.endswith(".py"):
                 return
-            if is_excluded(Path(event.src_path)):
+            if is_excluded(Path(path)):
                 return
-            if not _should_dispatch(last_event_time, event.src_path, time.monotonic()):
+            if not _should_dispatch(last_event_time, path, time.monotonic()):
                 return
-            orchestrator.dispatch(
-                "on-save", target=str(target_path), changed_file=event.src_path
-            )
+            orchestrator.dispatch("on-save", target=str(target_path), changed_file=path)
 
     observer = Observer()
     _schedule_watches(observer, Handler(), target_path)

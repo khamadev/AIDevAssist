@@ -45,13 +45,17 @@ def run(target: str, stage: str = "on-save", changed_file: str | None = None, **
 
 
 def _notify_break(changed_file: str | None, output: str) -> None:
+    # Plain ASCII only — emoji can raise UnicodeEncodeError on a Windows
+    # console using a non-UTF-8 codepage (cp1252 is still a common
+    # default), which would silently kill this print mid-call with no
+    # visible error, since it runs inside the watchdog observer's thread.
     print("\n" + "=" * 60)
     label = f" to {changed_file}" if changed_file else ""
-    print(f"⚠  Change{label} broke existing tests!")
+    print(f"[FAIL] Change{label} broke existing tests!")
     print(output[-1500:])
     print("=" * 60 + "\n")
 
 
 def _notify_fixed(changed_file: str | None) -> None:
     label = f" ({changed_file})" if changed_file else ""
-    print(f"✅ Tests are passing again{label}.\n")
+    print(f"[OK] Tests are passing again{label}.\n")
