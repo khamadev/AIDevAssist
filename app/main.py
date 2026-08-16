@@ -3,11 +3,12 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.core.database import Base, engine
-from app.routes import auth, itinerary, trips
+from app.routes import ai, auth, itinerary, trips
 
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Travel Planner")
+app.include_router(ai.router)
 
 app.include_router(auth.router)
 app.include_router(trips.router)
