@@ -279,3 +279,25 @@ app/main.py           |   3 +-
  5 files changed, 485 insertions(+), 245 deletions(-)
 ```
 
+## Mon Aug 17 00:14:39 2026 +0300 — Replace mock AI itinerary with real OSM/Overpass POI data; add security workflow, upgrade vulnerable deps; dark theme + remove emoji from frontend; fix misleading CLI failure messages
+- Commit: `07cb52f`
+- Author: MuhdKhamarullah
+- Changes:
+```
+.github/workflows/security.yml                |  69 +++
+ CHANGELOG.md                                  |  13 +
+ ai-test-tool/ai_test_tool/cli.py              |  20 +
+ ai-test-tool/tests/test_cli_failure_reason.py |  46 ++
+ app/routes/ai.py                              |  96 +++-
+ app/services/__init__.py                      |   0
+ app/services/poi.py                           | 103 ++++
+ requirements.txt                              |   6 +-
+ static/dashboard.html                         | 119 ++---
+ static/index.html                             |   4 +-
+ static/style.css                              | 654 ++++++++++++++------------
+ static/trip.html                              |   4 +-
+ tests/test_ai_routes.py                       | 105 +++++
+ tests/test_poi.py                             |  78 +++
+ 14 files changed, 959 insertions(+), 358 deletions(-)
+```
+
