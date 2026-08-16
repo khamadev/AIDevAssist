@@ -255,3 +255,14 @@ CHANGELOG.md | 12 ++++++++++++
  1 file changed, 12 insertions(+)
 ```
 
+## Sun Aug 16 15:29:57 2026 +0300 — Auto-stage agent-generated files during pre-commit; fix em-dash console encoding in reliability summary
+- Commit: `e3d3cb3`
+- Author: MuhdKhamarullah
+- Changes:
+```
+ai-test-tool/ai_test_tool/agents/reliability.py    |  4 +-
+ ai-test-tool/ai_test_tool/cli.py                   | 27 +++++++++
+ .../tests/test_cli_stage_generated_files.py        | 65 ++++++++++++++++++++++
+ 3 files changed, 95 insertions(+), 1 deletion(-)
+```
+
