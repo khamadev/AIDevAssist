@@ -107,9 +107,22 @@
             <a class="destination" href="/static/trip.html?id=${trip.id}">${trip.destination}</a>
             <div class="dates">${formatDateRange(trip.start_date, trip.end_date)}</div>
             <span class="badge ${status}">${tripStatusLabel(status)}</span>
-            <div class="card-actions" style="margin-top:10px;">
-              <button type="button" onclick="openAiPanel(${trip.id})">AI Plan</button>
-              <button type="button" class="danger" onclick="deleteTrip(${trip.id})">Delete</button>
+            <div class="card-actions" style="margin-top:10px; display:flex; gap:12px; align-items:center;">
+              <button
+                type="button"
+                onclick="openAiPanel(${trip.id})"
+                style="padding:12px 24px; border-radius:14px; border:1px solid transparent; background:#0f766e; color:#fff; font-weight:600;"
+              >
+                AI Plan
+              </button>
+              <button
+                type="button"
+                class="danger"
+                onclick="deleteTrip(${trip.id})"
+                style="padding:12px 24px; border-radius:14px; background:#fff; color:#6b7280; border:1px solid #d1d5db; font-weight:600;"
+              >
+                Delete
+              </button>
             </div>
           </div>
         </div>`;
