@@ -191,3 +191,22 @@ CHANGELOG.md                                    | 11 +++++++++++
  3 files changed, 42 insertions(+), 5 deletions(-)
 ```
 
+## Sun Aug 16 13:57:03 2026 +0300 — Fix AI-disclosure check to scan whole file, not just first 500 chars
+- Commit: `ea82325`
+- Author: MuhdKhamarullah
+- Changes:
+```
+CHANGELOG.md | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+```
+
+## Sun Aug 16 14:02:11 2026 +0300 — Merge pull request #2 from khamadev/test-maintenance-feature
+- Commit: `8948780`
+- Author: Khamarullah Muhd
+- Changes:
+```
+.../ai_test_tool/agents/test_maintenance.py        | 214 +++++++++++++++++++++
+ tests/test_trip_logic.py                           |  44 ++++-
+ 2 files changed, 257 insertions(+), 1 deletion(-)
+```
+

@@ -41,13 +41,21 @@ def run(target: str, stage: str, **context) -> dict:
     
     # Check which functions exist in the target file
     functions = _extract_functions(app_trip_logic_path)
-    
+
     # Check which functions are tested
     tested_functions = _extract_tested_functions(test_file_path)
-    
+
     # Find untested functions
     trips_overlap_tested = "trips_overlap" in tested_functions
-    
+
+    # This agent currently only knows how to *generate* tests for
+    # trips_overlap specifically — but it can still report on other
+    # untested functions it finds, rather than silently ignoring them.
+    # ("Report coverage gaps" was part of the original spec; auto-
+    # generating meaningful tests for an arbitrary function is a bigger
+    # feature than this scans for.)
+    other_gaps = sorted(functions - tested_functions - {"trips_overlap"})
+
     if trips_overlap_tested:
         result = TestMaintenanceResult(
             file=str(app_trip_logic_path),
@@ -55,36 +63,43 @@ def run(target: str, stage: str, **context) -> dict:
             generated_test_path=None,
             status="no_change_needed",
         )
+        summary = "trips_overlap already has test coverage"
+        if other_gaps:
+            summary += f" (other untested functions found: {', '.join(other_gaps)})"
         report = AgentReport(
             agent="test-maintenance",
             stage=stage,
-            summary="trips_overlap already has test coverage",
+            summary=summary,
             passed=True,
-            details=asdict(result),
+            details={**asdict(result), "other_coverage_gaps": other_gaps},
         )
         return report.to_dict()
-    
+
     # Generate tests for trips_overlap
     test_code = _generate_trips_overlap_tests()
-    
+
     # Append to test file
     _append_tests_to_file(test_file_path, test_code)
-    
+
     result = TestMaintenanceResult(
         file=str(app_trip_logic_path),
         function="trips_overlap",
         generated_test_path=str(test_file_path),
         status="generated",
     )
-    
+
+    summary = "Generated tests for trips_overlap function"
+    if other_gaps:
+        summary += f" (other untested functions found: {', '.join(other_gaps)})"
+
     report = AgentReport(
         agent="test-maintenance",
         stage=stage,
-        summary="Generated tests for trips_overlap function",
+        summary=summary,
         passed=True,
-        details=asdict(result),
+        details={**asdict(result), "other_coverage_gaps": other_gaps},
     )
-    
+
     return report.to_dict()
 
 

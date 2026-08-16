@@ -49,6 +49,11 @@ class TestMaintenanceResult:
     so the reliability agent verifies all of them, not just one.
     """
 
+    # Tells pytest not to try collecting this as a test class — its name
+    # happens to match pytest's default `Test*` discovery pattern, which
+    # otherwise produces a harmless but noisy collection warning.
+    __test__ = False
+
     file: str
     function: str
     generated_test_path: str | None
