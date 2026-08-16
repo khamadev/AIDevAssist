@@ -70,10 +70,30 @@ def test_fetch_points_of_interest_categorizes_and_dedupes(monkeypatch):
     assert by_name["Jardin du Luxembourg"] == "nature"
 
 
-def test_fetch_points_of_interest_returns_empty_list_on_error(monkeypatch):
+def test_fetch_points_of_interest_returns_empty_list_when_all_mirrors_fail(monkeypatch):
     def raise_error(*a, **k):
         raise httpx.ConnectError("no network")
 
     monkeypatch.setattr(httpx, "post", raise_error)
 
     assert poi.fetch_points_of_interest(48.8566, 2.3522) == []
+
+
+def test_fetch_points_of_interest_falls_back_to_next_mirror_on_failure(monkeypatch):
+    """Confirms the real-world failure mode found during testing: the
+    default Overpass mirror returning 504 under load must not mean the
+    whole lookup fails — a working mirror should still be tried."""
+    calls = []
+
+    def flaky_post(url, *a, **kwargs):
+        calls.append(url)
+        if url == poi.OVERPASS_URLS[0]:
+            return _FakeResponse({}, status_code=504)
+        return _FakeResponse({"elements": [{"tags": {"name": "Backup Museum", "tourism": "museum"}}]})
+
+    monkeypatch.setattr(httpx, "post", flaky_post)
+
+    results = poi.fetch_points_of_interest(48.8566, 2.3522)
+
+    assert len(calls) == 2
+    assert results == [{"name": "Backup Museum", "category": "sight"}]

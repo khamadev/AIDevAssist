@@ -301,3 +301,14 @@ app/main.py           |   3 +-
  14 files changed, 959 insertions(+), 358 deletions(-)
 ```
 
+## Mon Aug 17 00:20:26 2026 +0300 — Replace mock AI itinerary with real OSM/Overpass POI data; add security workflow, upgrade vulnerable deps; dark theme + remove emoji from frontend
+- Commit: `ccd3d04`
+- Author: MuhdKhamarullah
+- Changes:
+```
+CHANGELOG.md            | 22 ++++++++++++++++++++++
+ tests/test_ai_routes.py |  1 +
+ tests/test_poi.py       |  1 +
+ 3 files changed, 24 insertions(+)
+```
+

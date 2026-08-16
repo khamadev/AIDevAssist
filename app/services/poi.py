@@ -12,7 +12,16 @@ content, not a broken endpoint.
 import httpx
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
-OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+# overpass-api.de (the "default" public instance) is frequently overloaded
+# and returns 504s under normal load — confirmed happening for real
+# destinations during testing, not a rare edge case. Try multiple public
+# mirrors in order rather than depending on a single, often-overloaded
+# server; only fall back to generic itinerary content if all of them fail.
+OVERPASS_URLS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.openstreetmap.ru/api/interpreter",
+]
 # Both Nominatim and Overpass reject requests with a missing/generic
 # User-Agent (returns 406) as part of their usage policy — this is not
 # optional.
@@ -71,16 +80,8 @@ def fetch_points_of_interest(
     )
     query = f"[out:json][timeout:10];({filters});out center {limit};"
 
-    try:
-        response = httpx.post(
-            OVERPASS_URL,
-            data={"data": query},
-            headers={"User-Agent": USER_AGENT},
-            timeout=OVERPASS_TIMEOUT,
-        )
-        response.raise_for_status()
-        elements = response.json().get("elements", [])
-    except (httpx.HTTPError, ValueError):
+    elements = _query_overpass_mirrors(query)
+    if elements is None:
         return []
 
     pois: list[dict] = []
@@ -93,6 +94,25 @@ def fetch_points_of_interest(
         seen_names.add(name)
         pois.append({"name": name, "category": _categorize(tags)})
     return pois
+
+
+def _query_overpass_mirrors(query: str) -> list[dict] | None:
+    """Try each Overpass mirror in order, returning the first successful
+    response's elements. Returns None only if every mirror fails.
+    """
+    for url in OVERPASS_URLS:
+        try:
+            response = httpx.post(
+                url,
+                data={"data": query},
+                headers={"User-Agent": USER_AGENT},
+                timeout=OVERPASS_TIMEOUT,
+            )
+            response.raise_for_status()
+            return response.json().get("elements", [])
+        except (httpx.HTTPError, ValueError):
+            continue
+    return None
 
 
 def _categorize(tags: dict) -> str:
