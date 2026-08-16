@@ -1,7 +1,7 @@
 from datetime import date
 
 from pydantic import BaseModel, EmailStr, field_validator
-
+from typing import List
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -61,3 +61,25 @@ class ItineraryItemOut(BaseModel):
     day: date
 
     model_config = {"from_attributes": True}
+
+
+class AIGenerateRequest(BaseModel):
+    destination: str
+    days: int
+    preferences: str = ""
+    trip_id: int | None = None
+
+
+class AIPlanItem(BaseModel):
+    title: str
+    time: str
+    notes: str
+
+
+class AIPlanDay(BaseModel):
+    day: int
+    items: List[AIPlanItem]
+
+
+class AIGenerateResponse(BaseModel):
+    days: List[AIPlanDay]

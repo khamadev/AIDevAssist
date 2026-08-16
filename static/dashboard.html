@@ -9,7 +9,7 @@
 <body>
   <header>
     <a class="brand" href="/static/dashboard.html"><span class="logo-mark">🧭</span> Travel Planner</a>
-    <button class="secondary" id="logout-btn">Log out</button>
+    <button type="button" class="secondary" id="logout-btn">Log out</button>
   </header>
 
   <main>
@@ -40,22 +40,45 @@
       <input type="search" id="search" placeholder="Search destinations..." />
     </div>
     <div id="trips-list"><p class="muted">Loading...</p></div>
+
+    <!-- AI panel -->
+    <div id="ai-panel" class="card" style="display:none; margin-top:16px;">
+      <h3 style="margin-top:0;">AI Day Plan</h3>
+      <p id="ai-trip-info" class="muted"></p>
+
+      <div class="field-row">
+        <div>
+          <label for="ai-days">Days</label>
+          <input type="number" id="ai-days" min="1" max="14" value="3" />
+        </div>
+        <div>
+          <label for="ai-preferences">Preferences</label>
+          <input type="text" id="ai-preferences" placeholder="food, nature, museums" />
+        </div>
+      </div>
+
+      <div class="card-actions" style="margin-top:12px;">
+        <button type="button" id="ai-generate-btn">Generate</button>
+        <button type="button" class="secondary" id="ai-close-btn">Close</button>
+      </div>
+
+      <p id="ai-error" class="error"></p>
+      <div id="ai-result" style="margin-top:12px;"></div>
+    </div>
   </main>
 
   <script src="/static/js/api.js"></script>
   <script src="/static/js/ui.js"></script>
   <script>
     requireAuth();
-
     document.getElementById("logout-btn").addEventListener("click", logout);
 
     let allTrips = [];
+    let selectedTrip = null;
 
     async function loadTrips() {
-      const listEl = document.getElementById("trips-list");
       const response = await apiFetch("/trips");
       if (!response) return;
-
       allTrips = await response.json();
       renderTrips(allTrips);
     }
@@ -84,8 +107,22 @@
             <a class="destination" href="/static/trip.html?id=${trip.id}">${trip.destination}</a>
             <div class="dates">${formatDateRange(trip.start_date, trip.end_date)}</div>
             <span class="badge ${status}">${tripStatusLabel(status)}</span>
-            <div class="card-actions">
-              <button class="danger" onclick="deleteTrip(${trip.id})">Delete</button>
+            <div class="card-actions" style="margin-top:10px; display:flex; gap:12px; align-items:center;">
+              <button
+                type="button"
+                onclick="openAiPanel(${trip.id})"
+                style="padding:12px 24px; border-radius:14px; border:1px solid transparent; background:#0f766e; color:#fff; font-weight:600;"
+              >
+                AI Plan
+              </button>
+              <button
+                type="button"
+                class="danger"
+                onclick="deleteTrip(${trip.id})"
+                style="padding:12px 24px; border-radius:14px; background:#fff; color:#6b7280; border:1px solid #d1d5db; font-weight:600;"
+              >
+                Delete
+              </button>
             </div>
           </div>
         </div>`;
@@ -100,10 +137,101 @@
 
     async function deleteTrip(tripId) {
       const response = await apiFetch(`/trips/${tripId}`, { method: "DELETE" });
-      if (response && response.ok) {
+      if (response?.ok) {
         loadTrips();
       }
     }
+
+    function calcTripDays(startDate, endDate) {
+      const s = new Date(startDate);
+      const e = new Date(endDate);
+      if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime()) || e < s) return 1;
+      return Math.floor((e - s) / (1000 * 60 * 60 * 24)) + 1;
+    }
+
+    window.openAiPanel = (tripId) => {
+      const trip = allTrips.find((t) => t.id === tripId);
+      if (!trip) return;
+
+      selectedTrip = trip;
+
+      const panel = document.getElementById("ai-panel");
+      const info = document.getElementById("ai-trip-info");
+      const daysInput = document.getElementById("ai-days");
+      const resultEl = document.getElementById("ai-result");
+      const errEl = document.getElementById("ai-error");
+
+      info.textContent = `Trip: ${trip.destination} (${formatDateRange(trip.start_date, trip.end_date)})`;
+      daysInput.value = calcTripDays(trip.start_date, trip.end_date);
+      resultEl.innerHTML = "";
+      errEl.textContent = "";
+      panel.style.display = "block";
+      panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+
+    document.getElementById("ai-close-btn").addEventListener("click", () => {
+      document.getElementById("ai-panel").style.display = "none";
+      document.getElementById("ai-result").innerHTML = "";
+      document.getElementById("ai-error").textContent = "";
+      selectedTrip = null;
+    });
+
+    document.getElementById("ai-generate-btn").addEventListener("click", async () => {
+      const errEl = document.getElementById("ai-error");
+      const resultEl = document.getElementById("ai-result");
+      errEl.textContent = "";
+      resultEl.innerHTML = "";
+
+      if (!selectedTrip) {
+        errEl.textContent = "Please choose a trip first.";
+        return;
+      }
+
+      const days = Number(document.getElementById("ai-days").value || 0);
+      const preferences = document.getElementById("ai-preferences").value.trim();
+
+      if (days < 1 || days > 14) {
+        errEl.textContent = "Days must be between 1 and 14.";
+        return;
+      }
+
+      const payload = {
+        destination: selectedTrip.destination,
+        days,
+        preferences,
+        trip_id: selectedTrip.id,
+      };
+
+      const response = await apiFetch("/ai/generate-itinerary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response) return;
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        errEl.textContent = data.detail || "AI generation failed.";
+        return;
+      }
+
+      const data = await response.json();
+      const daysHtml = (data.days || [])
+        .map((d) => {
+          const itemsHtml = (d.items || [])
+            .map((it) => `<li><strong>${it.time}</strong> — ${it.title}<br/><span class="muted">${it.notes}</span></li>`)
+            .join("");
+          return `
+            <div class="card" style="margin:8px 0;">
+              <h4 style="margin:0 0 8px 0;">Day ${d.day}</h4>
+              <ul style="margin:0 0 0 18px;">${itemsHtml}</ul>
+            </div>`;
+        })
+        .join("");
+
+      resultEl.innerHTML = daysHtml || "<p class='muted'>No plan generated.</p>";
+    });
 
     document.getElementById("trip-form").addEventListener("submit", async (event) => {
       event.preventDefault();
