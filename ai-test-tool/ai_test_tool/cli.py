@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -56,10 +57,36 @@ def _run_orchestrate(stage: str, target: str, changed_file: str | None) -> None:
     for result in results:
         print(f"[{result['agent']}] {result['summary']}")
 
+    if stage == "pre-commit":
+        _stage_generated_files(target, results)
+
     _save_state(target, stage, results)
 
     failed = any(r.get("passed") is False for r in results)
     sys.exit(1 if failed else 0)
+
+
+def _stage_generated_files(target: str, results: list[dict]) -> None:
+    """`git add` any files an agent generated/modified during pre-commit.
+
+    Without this, a hook that writes a file mid-run (e.g. test-maintenance
+    generating a test) has no effect on the commit that triggered it — git
+    snapshots whatever was staged *before* the hook ran, so the generated
+    file would silently be left out of the very commit meant to include it,
+    sitting as an unrelated uncommitted change afterward instead.
+    """
+    paths: list[str] = []
+    for result in results:
+        details = result.get("details", {})
+        generated = details.get("generated_test_path")
+        if generated:
+            paths.append(generated)
+        paths.extend(details.get("generated_test_paths") or [])
+
+    if not paths:
+        return
+
+    subprocess.run(["git", "add", *paths], cwd=target, check=False)
 
 
 def _save_state(target: str, stage: str, results: list[dict]) -> None:

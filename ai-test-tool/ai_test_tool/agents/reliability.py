@@ -53,7 +53,9 @@ def run(target: str, stage: str = "pre-commit", **context) -> dict:
     if len(file_results) == 1:
         details = dict(file_results[0])
         details["files"] = file_results
-        summary = f"{_classification_label(details['classification'])} — {Path(details['test_path']).name}"
+        # ASCII "-" only, not an em dash — Windows consoles using a
+        # non-UTF-8 codepage (cp1252) can raise UnicodeEncodeError on it.
+        summary = f"{_classification_label(details['classification'])} - {Path(details['test_path']).name}"
         passed = details["classification"] == "reliable" and details["is_compliant"]
     else:
         details = _aggregate(file_results)
