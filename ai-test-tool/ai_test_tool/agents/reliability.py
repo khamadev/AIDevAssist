@@ -10,10 +10,10 @@ human-written one.
 import ast
 import os
 import subprocess
-import sys
 from pathlib import Path
 
 from ..exclusions import is_excluded
+from ..python_env import resolve_python
 from .contracts import AgentReport
 
 AI_DISCLOSURE_MARKERS = (
@@ -167,7 +167,7 @@ def _staged_test_files(target_path: Path) -> list[Path]:
 
 def _execute_test(target_path: Path, test_path: Path) -> tuple[bool, bool, str]:
     result = subprocess.run(
-        [sys.executable, "-m", "pytest", "-q", str(test_path)],
+        [resolve_python(target_path), "-m", "pytest", "-q", str(test_path)],
         cwd=target_path,
         capture_output=True,
         text=True,

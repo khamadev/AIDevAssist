@@ -3,9 +3,9 @@
 import os
 import re
 import subprocess
-import sys
 from pathlib import Path
 
+from ..python_env import resolve_python
 from .contracts import AgentReport
 
 
@@ -13,7 +13,7 @@ def run(target: str, stage: str = "on-save", changed_file: str | None = None, **
     target_path = Path(target).resolve()
 
     result = subprocess.run(
-        [sys.executable, "-m", "pytest", "-q", "--no-header"],
+        [resolve_python(target_path), "-m", "pytest", "-q", "--no-header"],
         cwd=target_path,
         capture_output=True,
         text=True,
