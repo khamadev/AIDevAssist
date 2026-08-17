@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import time
@@ -69,7 +70,22 @@ def _run_orchestrate(stage: str, target: str, changed_file: str | None) -> None:
     _save_state(target, stage, results)
 
     failed = any(r.get("passed") is False for r in results)
+    if failed and _human_override_requested():
+        # A human must always be able to override an automated block —
+        # this is a deliberate, visible escape hatch, not a silent bypass:
+        # every use is printed and written to state so it shows up in the
+        # documentation agent's changelog entry, not hidden from review.
+        print(
+            "[orchestrator] Blocking result overridden by "
+            "AI_TEST_TOOL_OVERRIDE=1 — a human takes responsibility for this commit."
+        )
+        _save_state(target, stage, results, overridden=True)
+        sys.exit(0)
     sys.exit(1 if failed else 0)
+
+
+def _human_override_requested() -> bool:
+    return os.environ.get("AI_TEST_TOOL_OVERRIDE") == "1"
 
 
 def _print_failure_reason(result: dict) -> None:
@@ -109,11 +125,18 @@ def _stage_generated_files(target: str, results: list[dict]) -> None:
     subprocess.run(["git", "add", *paths], cwd=target, check=False)
 
 
-def _save_state(target: str, stage: str, results: list[dict]) -> None:
+def _save_state(
+    target: str, stage: str, results: list[dict], overridden: bool = False
+) -> None:
     """Persist a stage's results so a later, separate process can read them.
 
     Needed because pre-commit and post-commit are different hook
     invocations (different processes) — see documentation.py.
+
+    `overridden` records that a human bypassed a blocking result via
+    AI_TEST_TOOL_OVERRIDE — the documentation agent reads this same file,
+    so an override always lands in the changelog's "Why" line rather than
+    disappearing once the commit goes through.
 
     Best-effort: a filesystem problem here (permissions, disk full, read-only
     checkout) shouldn't block a commit/push over a bookkeeping write — the
@@ -123,7 +146,8 @@ def _save_state(target: str, stage: str, results: list[dict]) -> None:
         state_dir = Path(target).resolve() / STATE_DIR
         state_dir.mkdir(exist_ok=True)
         state_file = state_dir / f"last_run_{stage}.json"
-        state_file.write_text(json.dumps(results, indent=2), encoding="utf-8")
+        payload = {"results": results, "human_override": overridden}
+        state_file.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     except OSError as exc:
         print(f"[orchestrator] Warning: could not save state ({exc})", file=sys.stderr)
 

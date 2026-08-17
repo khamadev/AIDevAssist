@@ -113,15 +113,23 @@ def _extract_reasoning(target_path: Path) -> str | None:
         return None
 
     try:
-        results = json.loads(state_file.read_text(encoding="utf-8"))
+        payload = json.loads(state_file.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return None
+
+    # Older state files were a bare list of results; the current format
+    # wraps them with a human_override flag (see cli.py._save_state).
+    results = payload.get("results", []) if isinstance(payload, dict) else payload
 
     notes = [
         r["details"]["notes"]
         for r in results
         if isinstance(r, dict) and r.get("details", {}).get("notes")
     ]
+    if isinstance(payload, dict) and payload.get("human_override"):
+        notes.append(
+            "a blocking result was overridden by a human via AI_TEST_TOOL_OVERRIDE"
+        )
     return "; ".join(notes) if notes else None
 
 
