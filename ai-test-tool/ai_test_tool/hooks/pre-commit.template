@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # Installed by ai-test-tool's `init` command. Do not edit directly —
 # edit ai_test_tool/hooks/pre-commit.template instead and re-run init.
+#
+# The path below is substituted at install time with the absolute path to
+# the interpreter `init` was run with — this hook does not assume
+# ai-test-tool lives at any particular location relative to this repo, or
+# that a bare `python` on PATH at commit time has it installed.
 set -e
 cd "$(git rev-parse --show-toplevel)"
-PYTHONPATH="ai-test-tool" python -m ai_test_tool.cli orchestrate --stage pre-commit --target .
+"{{PYTHON_EXE}}" -m ai_test_tool.cli orchestrate --stage pre-commit --target .

@@ -1,4 +1,5 @@
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -39,6 +40,19 @@ def test_install_hooks_is_idempotent(bare_git_repo: Path):
     backup_path = hook_path.with_name(hook_path.name + ".bak")
     assert hook_path.exists()
     assert not backup_path.exists()
+
+
+def test_install_hooks_bakes_in_the_absolute_interpreter_path(bare_git_repo: Path):
+    install_hooks(str(bare_git_repo))
+
+    for name in HOOK_NAMES:
+        content = (bare_git_repo / ".git" / "hooks" / name).read_text(encoding="utf-8")
+        assert sys.executable in content
+        assert "{{PYTHON_EXE}}" not in content
+        # No hardcoded relative path to ai-test-tool, and no reliance on a
+        # bare `python` resolved from PATH at commit time.
+        assert 'PYTHONPATH="ai-test-tool"' not in content
+        assert "\nPYTHONPATH" not in content
 
 
 def test_install_hooks_backs_up_a_pre_existing_foreign_hook(bare_git_repo: Path):

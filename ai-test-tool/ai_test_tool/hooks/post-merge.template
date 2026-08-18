@@ -6,5 +6,8 @@
 # is what catches PR merges done on GitHub's web UI, which happen
 # server-side and never trigger post-commit on anyone's machine. Reuses
 # the post-commit stage: documentation logs whatever commit is now HEAD.
+#
+# The path below is substituted at install time with the absolute path to
+# the interpreter `init` was run with — see pre-commit.template for why.
 cd "$(git rev-parse --show-toplevel)"
-PYTHONPATH="ai-test-tool" python -m ai_test_tool.cli orchestrate --stage post-commit --target .
+"{{PYTHON_EXE}}" -m ai_test_tool.cli orchestrate --stage post-commit --target .
