@@ -1,14 +1,24 @@
-"""Test maintenance agent: scans changed source files for untested functions
-and writes tests for them using the AI model.
+"""Test maintenance agent: scans source files for untested functions and
+writes tests for them using the AI model.
 
-Deliberately scoped to the current change (staged files at commit time, or
-the single saved file on-save), not the whole repository — the same
-reasoning reliability.py uses for its own scope: grading every untested
-function in the entire codebase on every commit would be slow, expensive,
-and would block work that has nothing to do with the current change. A
-full-repo coverage gap report is a different, unimplemented feature; this
-agent only ever *writes* tests for functions touched by what's actually
-being committed.
+Two entry points, two deliberately different scopes:
+
+- `run()` — scoped to the current change (staged files at commit time, or
+  the single saved file on-save). Wired into git hooks. Grading every
+  untested function in the entire codebase on every commit would make
+  commits slow and expensive in proportion to repo size, not to the size
+  of the actual change — so this never looks beyond what's actually being
+  committed.
+- `scan_repository()` — every non-excluded .py file in the target repo,
+  no matter what changed. Wired into `init` (see cli.py`_run_init`) and
+  intended for a one-time, human-observed pass over an existing codebase
+  that hasn't had this tool running against it from the start. Never wired
+  into a git hook — same cost/latency reasoning as above, just at repo
+  scale instead of commit scale.
+
+Both share the same generation core (`_build_report`); they differ only in
+which files they look at and how many functions they'll generate for
+before stopping.
 """
 
 import ast
@@ -25,16 +35,39 @@ from .contracts import AgentReport, TestMaintenanceResult
 # and predictable rather than proportional to however much code changed.
 MAX_FUNCTIONS_PER_RUN = 5
 
+# A full-repository scan is expected to find more untested functions than a
+# single commit ever would, and is run once at `init` time rather than on
+# every commit — so a higher cap is appropriate, but still a cap: an
+# unbounded scan on a large, long-unmaintained codebase could otherwise
+# mean dozens of API calls and a very long-running `init`, with no visible
+# progress until it finally finishes.
+MAX_FUNCTIONS_PER_FULL_SCAN = 25
+
 
 def run(target: str, stage: str, **context) -> dict:
     target_path = Path(target).resolve()
     source_files = _source_files_to_scan(target_path, context)
+    return _build_report(target_path, source_files, MAX_FUNCTIONS_PER_RUN, stage)
 
+
+def scan_repository(target: str, stage: str = "init", **context) -> dict:
+    """Full-repository scan — every non-excluded .py file, not just the
+    current change. See module docstring for why this is a distinct entry
+    point rather than a mode of `run()`.
+    """
+    target_path = Path(target).resolve()
+    source_files = _all_source_files(target_path)
+    return _build_report(target_path, source_files, MAX_FUNCTIONS_PER_FULL_SCAN, stage)
+
+
+def _build_report(
+    target_path: Path, source_files: list[Path], max_functions: int, stage: str
+) -> dict:
     if not source_files:
         return AgentReport(
             agent="test-maintenance",
             stage=stage,
-            summary="No changed source files to scan",
+            summary="No source files to scan",
             passed=True,
             details={"generated": [], "skipped": [], "coverage_gaps": []},
         ).to_dict()
@@ -57,7 +90,7 @@ def run(target: str, stage: str, **context) -> dict:
             qualified = f"{source_file.relative_to(target_path)}::{function_name}"
             coverage_gaps.append(qualified)
 
-            if len(generated) + len(skipped) >= MAX_FUNCTIONS_PER_RUN:
+            if len(generated) + len(skipped) >= max_functions:
                 skipped.append({"function": qualified, "reason": "per-run cap reached"})
                 continue
 
@@ -162,6 +195,16 @@ def _staged_source_files(target_path: Path) -> list[Path]:
         if _is_scannable_source(candidate):
             matches.append(candidate)
     return matches
+
+
+def _all_source_files(target_path: Path) -> list[Path]:
+    """Every non-excluded, non-test .py file under the target repo —
+    the full-scan equivalent of `_staged_source_files`. Sorted for
+    deterministic ordering: filesystem walk order isn't guaranteed
+    consistent across platforms, and this drives which functions get
+    generated for first when the full-scan cap is hit.
+    """
+    return sorted(p for p in target_path.rglob("*.py") if _is_scannable_source(p))
 
 
 def _is_scannable_source(path: Path) -> bool:

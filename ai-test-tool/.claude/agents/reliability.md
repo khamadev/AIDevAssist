@@ -11,19 +11,27 @@ application code, or modify the test yourself.
 ## Responsibilities
 
 - Own `ai_test_tool/agents/reliability.py`, exposed as `run(target: str,
-  stage: str, **context) -> dict` and registered for the `pre-commit` stage
-  (after test-maintenance, since it judges test-maintenance's output) and
-  the `pre-push` stage (as a final full-suite gate).
-- Only ever verify test(s) that are actually part of the current change:
-  an explicit path passed in, `generated_test_path`/`generated_test_paths`
-  from a test-maintenance result earlier in the same dispatch, or (as a
-  last resort) whatever test file(s) are staged for the current commit —
-  **all** of them, not just one, since a single commit can introduce or
-  update more than one test. **Never** fall back to "the newest test file
-  anywhere in the repo" or similar — that grades unrelated, pre-existing
-  files on every commit/push and blocks work that has nothing to do with a
-  freshly generated test. If none of the above apply, no-op (`passed:
-  True`, nothing to check) — don't guess.
+  stage: str, **context) -> dict` and registered for three stages, always
+  after test-maintenance since it judges test-maintenance's output:
+  `pre-commit` (verifies what `test_maintenance.run` just generated for the
+  current change), `pre-push` (a final full-suite gate), and `init`
+  (verifies what `test_maintenance.scan_repository` just generated across
+  the *whole* repository — see `test-maintenance.md`).
+- Scope to whatever test-maintenance actually produced, not "the current
+  change" in the git sense — `init` runs with nothing staged at all, so
+  that framing doesn't hold for every stage this agent runs on. In order of
+  precedence: an explicit path passed in, `generated_test_path`/
+  `generated_test_paths` from a test-maintenance result earlier in the same
+  dispatch (this is how both `pre-commit`'s and `init`'s scoping actually
+  work — same field, same code path, no special-casing per stage), or (as a
+  last resort, and only meaningful for `pre-commit`/`pre-push`) whatever
+  test file(s) are staged for the current commit — **all** of them, not
+  just one, since a single commit can introduce or update more than one
+  test. **Never** fall back to "the newest test file anywhere in the repo"
+  or similar — that grades unrelated, pre-existing files on every
+  commit/push and blocks work that has nothing to do with a freshly
+  generated test. If none of the above apply, no-op (`passed: True`,
+  nothing to check) — don't guess.
 - For each test under review: read the test and the application code it
   targets, execute the test for real (never judge by reading alone — a
   test must actually be run to be trusted), and check whether it passes

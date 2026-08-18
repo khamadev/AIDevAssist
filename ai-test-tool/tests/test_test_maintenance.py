@@ -235,3 +235,76 @@ def test_generated_tests_are_syntactically_valid_and_pass(tmp_path: Path, monkey
         text=True,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_scan_repository_finds_untested_functions_across_multiple_files(
+    tmp_path: Path, monkeypatch
+):
+    repo = _init_repo(tmp_path)
+    app_dir = repo / "app"
+    app_dir.mkdir()
+    (app_dir / "__init__.py").write_text("", encoding="utf-8")
+    (app_dir / "a.py").write_text("def a():\n    return 1\n", encoding="utf-8")
+    (app_dir / "b.py").write_text("def b():\n    return 2\n", encoding="utf-8")
+    (repo / "tests").mkdir()
+    # Deliberately NOT staged — a full-repo scan must not depend on git
+    # staging state the way run() does.
+    monkeypatch.setattr(ai_client, "generate", lambda prompt, **k: "def test_x():\n    assert True\n")
+
+    result = test_maintenance.scan_repository(target=str(repo))
+
+    functions = {g["function"] for g in result["details"]["generated"]}
+    assert functions == {"a", "b"}
+    assert (repo / "tests" / "test_a.py").exists()
+    assert (repo / "tests" / "test_b.py").exists()
+
+
+def test_scan_repository_skips_excluded_directories(tmp_path: Path, monkeypatch):
+    repo = _init_repo(tmp_path)
+    app_dir = repo / "app"
+    app_dir.mkdir()
+    (app_dir / "__init__.py").write_text("", encoding="utf-8")
+    (app_dir / "real.py").write_text("def real():\n    return 1\n", encoding="utf-8")
+    venv_dir = repo / ".venv" / "lib"
+    venv_dir.mkdir(parents=True)
+    (venv_dir / "vendored.py").write_text("def vendored():\n    return 2\n", encoding="utf-8")
+    (repo / "tests").mkdir()
+    monkeypatch.setattr(ai_client, "generate", lambda prompt, **k: "def test_x():\n    assert True\n")
+
+    result = test_maintenance.scan_repository(target=str(repo))
+
+    functions = {g["function"] for g in result["details"]["generated"]}
+    assert functions == {"real"}
+    assert "vendored" not in functions
+
+
+def test_scan_repository_reports_no_source_files_on_an_empty_repo(tmp_path: Path):
+    repo = _init_repo(tmp_path)
+
+    result = test_maintenance.scan_repository(target=str(repo))
+
+    assert result["details"]["generated"] == []
+    assert result["passed"] is True
+
+
+def test_scan_repository_uses_the_full_scan_cap_not_the_per_commit_cap(
+    tmp_path: Path, monkeypatch
+):
+    repo = _init_repo(tmp_path)
+    app_dir = repo / "app"
+    app_dir.mkdir()
+    (app_dir / "__init__.py").write_text("", encoding="utf-8")
+    # More functions than the per-commit cap, fewer than the full-scan cap.
+    count = test_maintenance.MAX_FUNCTIONS_PER_RUN + 3
+    assert count <= test_maintenance.MAX_FUNCTIONS_PER_FULL_SCAN
+    source = app_dir / "many.py"
+    source.write_text(
+        "\n\n".join(f"def f{i}():\n    return {i}" for i in range(count)) + "\n",
+        encoding="utf-8",
+    )
+    (repo / "tests").mkdir()
+    monkeypatch.setattr(ai_client, "generate", lambda prompt, **k: "def test_x():\n    assert True\n")
+
+    result = test_maintenance.scan_repository(target=str(repo))
+
+    assert len(result["details"]["generated"]) == count

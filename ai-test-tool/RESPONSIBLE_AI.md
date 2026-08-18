@@ -62,10 +62,17 @@ theoretical one, and is scoped deliberately narrow:
 - Only the source of the specific untested function is sent, extracted via
   `ast.get_source_segment` — never the whole file, never the whole diff,
   never unrelated files in the repo.
-- Only functions in files that actually changed in the current commit (or
-  the file just saved) are ever considered — see
-  `test-maintenance.md`'s scoping rule. Nothing is sent proactively or on
-  a schedule.
+- On every git-hook stage (`pre-commit`, `on-save`), only functions in
+  files that actually changed are ever considered, capped at 5 per
+  dispatch. Nothing is sent proactively or on a schedule from a hook.
+- **The one deliberate exception:** running `ai-test-tool init` triggers a
+  one-time, human-initiated full-repository scan (`test_maintenance.
+  scan_repository`), capped at 25 functions, that considers every
+  untested function in the repo, not just a current change — because a
+  repo that hasn't had this tool running from the start needs a way to
+  close existing gaps, not just prevent new ones. This only runs when a
+  person explicitly runs `init` (or re-runs it without `--skip-scan`); it
+  is never triggered by a commit, push, save, or any automated schedule.
 - No git commit metadata (author name, email, timestamps), no other
   contributors' code, and no application runtime data (e.g. travel-planner
   user records) is ever included in a prompt.

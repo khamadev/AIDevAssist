@@ -28,6 +28,13 @@ the earliest possible moment.
   to just the tests relevant to the changed file is still a worthwhile
   improvement, not yet done) and print a clear, human-readable pass/fail
   notification to the terminal the watcher is running in.
+- Every save currently prints its own result unconditionally — there is no
+  state tracking between saves, so a run of saves while something stays
+  broken produces one `[FAIL]` per save, not one on the initial break. This
+  is a real gap, not a design choice: state-change-only notification (quiet
+  while still broken, print again only on a transition) would be a
+  reasonable improvement and does not currently exist. Don't describe or
+  assume this behavior elsewhere without implementing it first.
 - Treat pytest exit code 5 ("no tests collected") as a neutral, non-failing
   state — the point is to catch regressions, not to nag about missing
   coverage (that's the test-maintenance agent's concern).
@@ -40,9 +47,6 @@ the earliest possible moment.
 - Do not duplicate the `pre-commit` hook's job. `pre-commit` is the last
   gate before a commit is even allowed to happen; this agent's job is purely
   advisory and immediate, while the developer is still mid-change.
-- Do not spam repeated notifications for the same still-broken state —
-  only notify on a state change (was passing, now failing; or was failing,
-  now fixed), not on every single save while broken.
 
 ## When asked to extend this agent
 

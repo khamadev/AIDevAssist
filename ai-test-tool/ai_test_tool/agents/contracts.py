@@ -19,7 +19,7 @@ documentation) to record *why* something happened, not just that it did.
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-Stage = Literal["pre-commit", "post-commit", "pre-push", "on-save"]
+Stage = Literal["pre-commit", "post-commit", "pre-push", "on-save", "init"]
 
 
 @dataclass

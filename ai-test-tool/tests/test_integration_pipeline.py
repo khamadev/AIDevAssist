@@ -93,6 +93,41 @@ def test_full_pre_commit_chain_approves_a_genuinely_good_generated_test(tmp_path
     assert failed is False
 
 
+def test_full_init_chain_scans_the_whole_repo_without_any_staging(tmp_path: Path, monkeypatch):
+    """The `init` stage is the full-repository counterpart to the
+    pre-commit chain above: no git staging involved at all (unlike
+    _seed_repo's own `git add`, deliberately not relied on here), proving
+    scan_repository finds and generates for every untested function in the
+    repo, and reliability verifies exactly what it generated via the same
+    upstream_results wiring pre-commit uses.
+    """
+    repo = tmp_path
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True)
+    (repo / "app").mkdir()
+    (repo / "app" / "__init__.py").write_text("", encoding="utf-8")
+    (repo / "app" / "trip_logic.py").write_text(TRIP_LOGIC_SOURCE, encoding="utf-8")
+    (repo / "tests").mkdir()
+    (repo / "tests" / "__init__.py").write_text("", encoding="utf-8")
+    (repo / "tests" / "test_trip_logic.py").write_text(EXISTING_TEST_SOURCE, encoding="utf-8")
+    # Nothing staged — a full-repo scan must not depend on git index state.
+
+    monkeypatch.setattr(ai_client, "generate", lambda prompt, **k: GENERATED_TRIPS_OVERLAP_TEST)
+    orchestrator.register("init", test_maintenance.scan_repository)
+    orchestrator.register("init", reliability.run)
+
+    results = orchestrator.dispatch("init", target=str(repo))
+
+    assert len(results) == 2
+    tm_result, rel_result = results
+
+    assert {g["function"] for g in tm_result["details"]["generated"]} == {"trips_overlap"}
+    assert rel_result["details"]["classification"] == "reliable"
+    assert rel_result["details"]["is_compliant"] is True
+    assert rel_result["passed"] is True
+
+
 def test_full_pre_commit_chain_blocks_a_hallucinated_generated_test(tmp_path: Path):
     """Stands in for test-maintenance with a deliberately broken agent (not
     the real one) to prove reliability actually catches bad AI output when

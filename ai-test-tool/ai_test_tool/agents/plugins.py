@@ -31,6 +31,10 @@ def _load_test_maintenance() -> None:
     except ImportError:
         return
     orchestrator.register("pre-commit", test_maintenance.run)
+    # `init` runs scan_repository (the whole repo), not run() (the current
+    # change) — see test_maintenance.py's module docstring for why these
+    # are two distinct entry points rather than one function with a flag.
+    orchestrator.register("init", test_maintenance.scan_repository)
 
 
 def _load_reliability() -> None:
@@ -39,8 +43,15 @@ def _load_reliability() -> None:
     except ImportError:
         return
     # Reliability judges test-maintenance's output, so it must be registered
-    # after it for pre-commit — dict/list ordering in orchestrator.py
-    # preserves registration order, so this function running after
-    # _load_test_maintenance() is what guarantees that.
+    # after it for every stage where both run — dict/list ordering in
+    # orchestrator.py preserves registration order, so this function
+    # running after _load_test_maintenance() is what guarantees that.
+    # For `init` specifically, this is also how reliability finds out what
+    # to verify: dispatch() passes it scan_repository's own result as
+    # upstream_results, and reliability's `_resolve_test_paths` already
+    # knows to read `generated_test_paths` from it — no new plumbing
+    # needed for full-repo scans to get verified the same way commit-time
+    # generation does.
     orchestrator.register("pre-commit", reliability.run)
     orchestrator.register("pre-push", reliability.run)
+    orchestrator.register("init", reliability.run)

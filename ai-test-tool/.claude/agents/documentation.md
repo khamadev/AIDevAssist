@@ -11,7 +11,12 @@ or judge tests yourself.
 ## Responsibilities
 
 - Own `ai_test_tool/agents/documentation.py`, exposed as `run(target: str,
-  stage: str, **context) -> dict` and registered for the `post-commit` stage.
+  stage: str, **context) -> dict` and registered for the `post-commit` stage
+  only — not `init`. `init`'s full-repository scan (`test_maintenance.
+  scan_repository`) writes test files to disk but never commits them, so
+  there is no commit yet for this agent to log; a developer who reviews and
+  commits what the scan generated gets a normal changelog entry from the
+  `post-commit` hook at that point, same as any other commit.
 - On each run, inspect the most recent commit in the target repo (`git log
   -1`, `git diff HEAD~1 HEAD --stat`) and append a dated entry to
   `CHANGELOG.md` in the target repo's root.

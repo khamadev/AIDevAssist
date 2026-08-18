@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 
 from . import orchestrator
+from .agents.test_maintenance import MAX_FUNCTIONS_PER_FULL_SCAN
 from .exclusions import is_excluded
 from .hooks.install import install_hooks
 
@@ -26,6 +27,14 @@ def main(argv: list[str] | None = None) -> None:
 
     init_parser = subparsers.add_parser("init", help="Install git hooks into the target repo")
     init_parser.add_argument("target", nargs="?", default=".")
+    init_parser.add_argument(
+        "--skip-scan",
+        action="store_true",
+        help=(
+            "Skip the full-repository test-maintenance + reliability scan "
+            "that normally runs after hooks are installed"
+        ),
+    )
 
     orchestrate_parser = subparsers.add_parser(
         "orchestrate", help="Run the agents registered for a given stage"
@@ -44,17 +53,42 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     if args.command == "init":
-        install_hooks(args.target)
+        _run_init(args.target, skip_scan=args.skip_scan)
     elif args.command == "orchestrate":
         _run_orchestrate(args.stage, args.target, args.file)
     elif args.command == "watch":
         _run_watch(args.target)
 
 
-def _run_orchestrate(stage: str, target: str, changed_file: str | None) -> None:
-    orchestrator.bootstrap()
-    results = orchestrator.dispatch(stage, target=target, changed_file=changed_file)
+def _run_init(target: str, skip_scan: bool) -> None:
+    install_hooks(target)
+    if skip_scan:
+        return
 
+    print(
+        "\nScanning the full repository for untested functions "
+        "(test-maintenance + reliability)...\n"
+        "This can take a while and make several AI model calls, capped at "
+        f"{MAX_FUNCTIONS_PER_FULL_SCAN} functions. Run `init --skip-scan` "
+        "to install hooks without it."
+    )
+    orchestrator.bootstrap()
+    results = orchestrator.dispatch("init", target=target)
+    _print_results(results)
+
+    generated = any(
+        result.get("agent") == "test-maintenance" and result.get("details", {}).get("generated")
+        for result in results
+    )
+    if generated:
+        print(
+            "\nGenerated tests were written to disk but not staged or "
+            "committed — review them with `git diff`, then `git add` and "
+            "commit whatever you're satisfied with."
+        )
+
+
+def _print_results(results: list[dict]) -> None:
     for result in results:
         print(f"[{result['agent']}] {result['summary']}")
         # A summary can read as positive ("2/2 tests reliable") while the
@@ -63,6 +97,12 @@ def _run_orchestrate(stage: str, target: str, changed_file: str | None) -> None:
         # when passed is False, don't make the developer go dig for it.
         if result.get("passed") is False:
             _print_failure_reason(result)
+
+
+def _run_orchestrate(stage: str, target: str, changed_file: str | None) -> None:
+    orchestrator.bootstrap()
+    results = orchestrator.dispatch(stage, target=target, changed_file=changed_file)
+    _print_results(results)
 
     if stage == "pre-commit":
         _stage_generated_files(target, results)

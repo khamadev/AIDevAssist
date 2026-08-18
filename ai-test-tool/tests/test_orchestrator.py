@@ -70,6 +70,17 @@ def test_bootstrap_picks_up_reliability_plugin():
     assert len(orchestrator.AGENT_REGISTRY["pre-push"]) >= 1
 
 
+def test_bootstrap_registers_full_scan_and_reliability_for_init_in_order():
+    orchestrator.bootstrap()
+    registered = orchestrator.AGENT_REGISTRY["init"]
+    assert len(registered) == 2
+    # test-maintenance's full-repo scan must run before reliability, the
+    # same ordering guarantee pre-commit relies on — reliability verifies
+    # what scan_repository just generated via upstream_results.
+    assert registered[0].__module__.endswith("test_maintenance")
+    assert registered[1].__module__.endswith("reliability")
+
+
 def test_dispatch_does_not_crash_when_an_agent_raises():
     def broken_agent(target, stage, **context):
         raise RuntimeError("boom")
