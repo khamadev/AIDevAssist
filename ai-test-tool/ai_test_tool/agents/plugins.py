@@ -1,9 +1,10 @@
-"""Extension point for teammates' agents (test-maintenance, reliability).
+"""Extension point for agents (test-maintenance, reliability).
 
-`reliability.py` is implemented (see `.claude/agents/reliability.md` for its
-spec). `test_maintenance.py` is still owned by a teammate using Copilot and
-isn't in this repo yet — until it lands, `_load_test_maintenance()` below
-fails gracefully (does nothing).
+Both `test_maintenance.py` and `reliability.py` are implemented — see
+`.claude/agents/test-maintenance.md` and `.claude/agents/reliability.md`
+for their specs. `_load_test_maintenance()` and `_load_reliability()`
+still fail gracefully (do nothing) if either module is ever removed or
+renamed, so a partially-set-up checkout degrades rather than crashing.
 
 To plug a new agent in:
 

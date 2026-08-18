@@ -5,10 +5,21 @@ core thing the project needs to demonstrate: that a bad AI-generated test
 gets caught before it's trusted, and a good one is correctly approved.
 """
 
+import subprocess
 from pathlib import Path
 
-from ai_test_tool import orchestrator
+from ai_test_tool import ai_client, orchestrator
 from ai_test_tool.agents import reliability, test_maintenance
+
+GENERATED_TRIPS_OVERLAP_TEST = '''def test_trips_overlap_true_for_touching_ranges():
+    from datetime import date
+    assert trips_overlap(date(2026, 1, 1), date(2026, 1, 5), date(2026, 1, 5), date(2026, 1, 7))
+
+
+def test_trips_overlap_false_for_disjoint_ranges():
+    from datetime import date
+    assert not trips_overlap(date(2026, 1, 1), date(2026, 1, 2), date(2026, 1, 5), date(2026, 1, 7))
+'''
 
 TRIP_LOGIC_SOURCE = '''
 from datetime import date
@@ -45,17 +56,23 @@ def test_is_day_within_trip_true_for_a_day_inside_range():
 
 
 def _seed_repo(tmp_path: Path) -> Path:
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, check=True)
     (tmp_path / "app").mkdir()
     (tmp_path / "app" / "__init__.py").write_text("", encoding="utf-8")
-    (tmp_path / "app" / "trip_logic.py").write_text(TRIP_LOGIC_SOURCE, encoding="utf-8")
+    trip_logic = tmp_path / "app" / "trip_logic.py"
+    trip_logic.write_text(TRIP_LOGIC_SOURCE, encoding="utf-8")
     (tmp_path / "tests").mkdir()
     (tmp_path / "tests" / "__init__.py").write_text("", encoding="utf-8")
     (tmp_path / "tests" / "test_trip_logic.py").write_text(EXISTING_TEST_SOURCE, encoding="utf-8")
+    subprocess.run(["git", "add", str(trip_logic)], cwd=tmp_path, check=True)
     return tmp_path
 
 
-def test_full_pre_commit_chain_approves_a_genuinely_good_generated_test(tmp_path: Path):
+def test_full_pre_commit_chain_approves_a_genuinely_good_generated_test(tmp_path: Path, monkeypatch):
     _seed_repo(tmp_path)
+    monkeypatch.setattr(ai_client, "generate", lambda prompt, **k: GENERATED_TRIPS_OVERLAP_TEST)
     orchestrator.register("pre-commit", test_maintenance.run)
     orchestrator.register("pre-commit", reliability.run)
 
@@ -65,7 +82,7 @@ def test_full_pre_commit_chain_approves_a_genuinely_good_generated_test(tmp_path
     tm_result, rel_result = results
 
     assert tm_result["agent"] == "test-maintenance"
-    assert tm_result["details"]["status"] == "generated"
+    assert {g["function"] for g in tm_result["details"]["generated"]} == {"trips_overlap"}
 
     assert rel_result["agent"] == "reliability"
     assert rel_result["details"]["classification"] == "reliable"

@@ -1,229 +1,310 @@
-"""Test maintenance agent: generates and maintains pytest tests for untested functions."""
+"""Test maintenance agent: scans changed source files for untested functions
+and writes tests for them using the AI model.
+
+Deliberately scoped to the current change (staged files at commit time, or
+the single saved file on-save), not the whole repository — the same
+reasoning reliability.py uses for its own scope: grading every untested
+function in the entire codebase on every commit would be slow, expensive,
+and would block work that has nothing to do with the current change. A
+full-repo coverage gap report is a different, unimplemented feature; this
+agent only ever *writes* tests for functions touched by what's actually
+being committed.
+"""
 
 import ast
 from dataclasses import asdict
-from datetime import date
 from pathlib import Path
 
+from .. import ai_client, secret_redaction
+from ..exclusions import is_excluded
 from .contracts import AgentReport, TestMaintenanceResult
+
+# Caps how many functions get sent to the model in one dispatch. A single
+# commit touching a large file could otherwise turn a git hook into a long,
+# expensive burst of API calls — this keeps worst-case hook latency bounded
+# and predictable rather than proportional to however much code changed.
+MAX_FUNCTIONS_PER_RUN = 5
 
 
 def run(target: str, stage: str, **context) -> dict:
-    """Generate tests for untested functions.
-    
-    Args:
-        target: Path to the repository root
-        stage: Lifecycle stage (pre-commit, post-commit, pre-push, on-save)
-        **context: Additional context (currently unused)
-    
-    Returns:
-        dict: AgentReport with TestMaintenanceResult in details
-    """
     target_path = Path(target).resolve()
-    
-    # For this implementation, we target app/trip_logic.py's trips_overlap function
-    app_trip_logic_path = target_path / "app" / "trip_logic.py"
-    test_file_path = target_path / "tests" / "test_trip_logic.py"
-    
-    if not app_trip_logic_path.exists():
+    source_files = _source_files_to_scan(target_path, context)
+
+    if not source_files:
         return AgentReport(
             agent="test-maintenance",
             stage=stage,
-            summary="Target file not found",
-            passed=False,
-            details=asdict(TestMaintenanceResult(
-                file=str(app_trip_logic_path),
-                function="trips_overlap",
-                generated_test_path=None,
-                status="skipped",
-            )),
-        ).to_dict()
-    
-    # Check which functions exist in the target file
-    functions = _extract_functions(app_trip_logic_path)
-
-    # Check which functions are tested
-    tested_functions = _extract_tested_functions(test_file_path)
-
-    # Find untested functions
-    trips_overlap_tested = "trips_overlap" in tested_functions
-
-    # This agent currently only knows how to *generate* tests for
-    # trips_overlap specifically — but it can still report on other
-    # untested functions it finds, rather than silently ignoring them.
-    # ("Report coverage gaps" was part of the original spec; auto-
-    # generating meaningful tests for an arbitrary function is a bigger
-    # feature than this scans for.)
-    other_gaps = sorted(functions - tested_functions - {"trips_overlap"})
-
-    if trips_overlap_tested:
-        result = TestMaintenanceResult(
-            file=str(app_trip_logic_path),
-            function="trips_overlap",
-            generated_test_path=None,
-            status="no_change_needed",
-        )
-        summary = "trips_overlap already has test coverage"
-        if other_gaps:
-            summary += f" (other untested functions found: {', '.join(other_gaps)})"
-        report = AgentReport(
-            agent="test-maintenance",
-            stage=stage,
-            summary=summary,
+            summary="No changed source files to scan",
             passed=True,
-            details={**asdict(result), "other_coverage_gaps": other_gaps},
-        )
-        return report.to_dict()
+            details={"generated": [], "skipped": [], "coverage_gaps": []},
+        ).to_dict()
 
-    # Generate tests for trips_overlap
-    test_code = _generate_trips_overlap_tests()
+    generated: list[dict] = []
+    skipped: list[dict] = []
+    coverage_gaps: list[str] = []
+    ai_unavailable_reason: str | None = None
 
-    # Append to test file
-    _append_tests_to_file(test_file_path, test_code)
+    for source_file in source_files:
+        functions = _extract_public_functions(source_file)
+        if not functions:
+            continue
+
+        test_file = _test_file_for(source_file, target_path)
+        tested = _tested_functions(test_file, _module_dotted_path(source_file, target_path))
+        untested = sorted(functions - tested)
+
+        for function_name in untested:
+            qualified = f"{source_file.relative_to(target_path)}::{function_name}"
+            coverage_gaps.append(qualified)
+
+            if len(generated) + len(skipped) >= MAX_FUNCTIONS_PER_RUN:
+                skipped.append({"function": qualified, "reason": "per-run cap reached"})
+                continue
+
+            if ai_unavailable_reason:
+                skipped.append({"function": qualified, "reason": ai_unavailable_reason})
+                continue
+
+            module_path = _module_dotted_path(source_file, target_path)
+            try:
+                test_code, secrets_redacted = _generate_test(
+                    source_file, function_name, module_path
+                )
+            except ai_client.AIUnavailable as exc:
+                ai_unavailable_reason = str(exc)
+                skipped.append({"function": qualified, "reason": ai_unavailable_reason})
+                continue
+
+            _append_test_to_file(test_file, function_name, module_path, test_code)
+            generated.append(
+                {
+                    "file": str(source_file.relative_to(target_path)),
+                    "function": function_name,
+                    "test_path": str(test_file.relative_to(target_path)),
+                    "secrets_redacted": secrets_redacted,
+                }
+            )
 
     result = TestMaintenanceResult(
-        file=str(app_trip_logic_path),
-        function="trips_overlap",
-        generated_test_path=str(test_file_path),
-        status="generated",
+        generated=generated,
+        skipped=skipped,
+        coverage_gaps=coverage_gaps,
     )
 
-    summary = "Generated tests for trips_overlap function"
-    if other_gaps:
-        summary += f" (other untested functions found: {', '.join(other_gaps)})"
-
+    summary = _summarize(generated, skipped, coverage_gaps)
+    # Several functions can land in the same test file (e.g. two untested
+    # functions in one module) — dedupe here so reliability.py doesn't
+    # verify the same file twice for one dispatch.
+    unique_test_paths = list(dict.fromkeys(g["test_path"] for g in generated))
     report = AgentReport(
         agent="test-maintenance",
         stage=stage,
         summary=summary,
-        passed=True,
-        details={**asdict(result), "other_coverage_gaps": other_gaps},
+        passed=len(skipped) == 0,
+        details={
+            **asdict(result),
+            "generated_test_paths": unique_test_paths,
+        },
     )
-
     return report.to_dict()
 
 
-def _extract_functions(file_path: Path) -> set[str]:
-    """Extract function names from a Python file using AST."""
-    try:
-        tree = ast.parse(file_path.read_text(encoding="utf-8"))
-    except (OSError, SyntaxError):
-        return set()
-    
-    functions = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.FunctionDef):
-            functions.add(node.name)
-    
-    return functions
+def _summarize(generated: list[dict], skipped: list[dict], coverage_gaps: list[str]) -> str:
+    if not coverage_gaps:
+        return "No untested functions found in changed files"
+    parts = [f"Generated {len(generated)} test(s) for {len(coverage_gaps)} untested function(s)"]
+    redacted_count = sum(1 for g in generated if g.get("secrets_redacted"))
+    if redacted_count:
+        # Visible in the same place a human override shows up (cli.py's
+        # printed summary, then the changelog) — a secret being redacted is
+        # exactly the kind of thing that shouldn't be discoverable only by
+        # reading source code after the fact.
+        parts.append(f"secrets redacted before sending to AI in {redacted_count} function(s)")
+    if skipped:
+        parts.append(f"{len(skipped)} skipped ({skipped[0]['reason']})")
+    return "; ".join(parts)
 
 
-def _extract_tested_functions(test_file_path: Path) -> set[str]:
-    """Extract tested function names from a pytest test file.
-    
-    This is a simple heuristic: looks for imports from the target module
-    to determine which functions are tested.
+def _source_files_to_scan(target_path: Path, context: dict) -> list[Path]:
+    """Which non-test .py files changed in this dispatch.
+
+    Prefers an explicit `changed_file` from context (the on-save stage
+    passes exactly the file that was just saved); otherwise falls back to
+    whatever is staged for the current commit.
     """
-    if not test_file_path.exists():
-        return set()
-    
+    changed_file = context.get("changed_file")
+    if changed_file:
+        candidate = Path(changed_file)
+        if not candidate.is_absolute():
+            candidate = target_path / candidate
+        return [candidate] if _is_scannable_source(candidate) else []
+
+    return _staged_source_files(target_path)
+
+
+def _staged_source_files(target_path: Path) -> list[Path]:
+    import subprocess
+
     try:
-        tree = ast.parse(test_file_path.read_text(encoding="utf-8"))
-    except (OSError, SyntaxError):
+        result = subprocess.run(
+            ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
+            cwd=target_path,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return []
+
+    matches = []
+    for line in result.stdout.splitlines():
+        candidate = target_path / line.strip()
+        if _is_scannable_source(candidate):
+            matches.append(candidate)
+    return matches
+
+
+def _is_scannable_source(path: Path) -> bool:
+    return (
+        path.suffix == ".py"
+        and not path.name.startswith("test_")
+        and path.exists()
+        and not is_excluded(path)
+    )
+
+
+def _extract_public_functions(source_file: Path) -> set[str]:
+    """Top-level function names, excluding underscore-prefixed helpers.
+
+    A leading underscore is this codebase's own convention for "private,
+    internal helper" (see e.g. poi.py, reliability.py) — those are
+    implementation details exercised indirectly through the public
+    functions that call them, not things that need their own direct test.
+    """
+    try:
+        tree = ast.parse(source_file.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError, UnicodeDecodeError):
         return set()
-    
+
+    return {
+        node.name
+        for node in ast.iter_child_nodes(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and not node.name.startswith("_")
+    }
+
+
+def _tested_functions(test_file: Path, module_dotted_path: str) -> set[str]:
+    """Function names imported from this module anywhere in its test file.
+
+    Same heuristic reliability.py's predecessor used: a test that doesn't
+    import the function under a matching name isn't recognized as covering
+    it, even if it happens to test equivalent behavior some other way. That
+    trade-off favors occasionally regenerating a test that already exists
+    (harmless — the function still gets the same, or better, coverage) over
+    silently skipping a function that genuinely has none.
+    """
+    if not test_file.exists():
+        return set()
+    try:
+        tree = ast.parse(test_file.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError, UnicodeDecodeError):
+        return set()
+
     tested = set()
     for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom):
-            # Look for "from app.trip_logic import ..."
-            if node.module == "app.trip_logic" and node.names:
-                for alias in node.names:
-                    tested.add(alias.name)
-    
+        if isinstance(node, ast.ImportFrom) and node.module == module_dotted_path:
+            tested.update(alias.name for alias in node.names)
     return tested
 
 
-def _generate_trips_overlap_tests() -> str:
-    """Generate comprehensive test cases for the trips_overlap function."""
-    return '''
-
-# Tests for trips_overlap function
-def test_trips_overlap_same_trip():
-    """Two identical trips should overlap."""
-    assert trips_overlap(date(2026, 1, 1), date(2026, 1, 5), date(2026, 1, 1), date(2026, 1, 5)) is True
+def _module_dotted_path(source_file: Path, target_path: Path) -> str:
+    relative = source_file.relative_to(target_path).with_suffix("")
+    return ".".join(relative.parts)
 
 
-def test_trips_overlap_complete_overlap():
-    """Trip A completely overlaps Trip B."""
-    assert trips_overlap(date(2026, 1, 1), date(2026, 1, 10), date(2026, 1, 3), date(2026, 1, 7)) is True
+def _test_file_for(source_file: Path, target_path: Path) -> Path:
+    return target_path / "tests" / f"test_{source_file.stem}.py"
 
 
-def test_trips_overlap_partial_overlap_start():
-    """Trip B starts during Trip A."""
-    assert trips_overlap(date(2026, 1, 1), date(2026, 1, 5), date(2026, 1, 3), date(2026, 1, 7)) is True
-
-
-def test_trips_overlap_partial_overlap_end():
-    """Trip A starts during Trip B."""
-    assert trips_overlap(date(2026, 1, 3), date(2026, 1, 7), date(2026, 1, 1), date(2026, 1, 5)) is True
-
-
-def test_trips_overlap_no_overlap_before():
-    """Trip A ends before Trip B starts."""
-    assert trips_overlap(date(2026, 1, 1), date(2026, 1, 3), date(2026, 1, 5), date(2026, 1, 7)) is False
-
-
-def test_trips_overlap_no_overlap_after():
-    """Trip A starts after Trip B ends."""
-    assert trips_overlap(date(2026, 1, 5), date(2026, 1, 7), date(2026, 1, 1), date(2026, 1, 3)) is False
-
-
-def test_trips_overlap_touch_at_endpoints():
-    """Trips that touch at exact endpoints should overlap."""
-    assert trips_overlap(date(2026, 1, 1), date(2026, 1, 5), date(2026, 1, 5), date(2026, 1, 7)) is True
-
-
-def test_trips_overlap_one_contains_other():
-    """Trip A contains Trip B entirely."""
-    assert trips_overlap(date(2026, 1, 1), date(2026, 1, 10), date(2026, 1, 2), date(2026, 1, 3)) is True
-'''
-
-
-def _append_tests_to_file(test_file_path: Path, test_code: str) -> None:
-    """Append new tests to the test file with AI disclosure marker.
-    
-    If the file already imports trips_overlap, just append the tests.
-    Otherwise, update the import statement first.
+def _generate_test(source_file: Path, function_name: str, module_path: str) -> tuple[str, bool]:
+    """Returns (generated test code, whether a likely secret was redacted
+    from the function's source before it was sent to the model).
     """
-    if not test_file_path.exists():
-        # Create new test file with disclosure marker
-        content = (
-            "# AI-generated by ai-test-tool\n"
-            "from datetime import date\n\n"
-            "import pytest\n\n"
-            "from app.trip_logic import trips_overlap\n"
-            + test_code
-        )
-        test_file_path.write_text(content, encoding="utf-8")
+    function_source = _function_source(source_file, function_name)
+    # Defense in depth: redact before this ever leaves the process, not
+    # after — see secret_redaction.py. A hardcoded credential in the
+    # function under test must never reach the prompt, even if it would
+    # have made for a more "realistic" generated test.
+    function_source, secrets_redacted = secret_redaction.redact(function_source)
+
+    prompt = (
+        "Write pytest test functions for the Python function below. "
+        "Requirements:\n"
+        f"- Import it as: from {module_path} import {function_name}\n"
+        "- Cover the normal case, at least one edge case, and error "
+        "handling if the function can raise.\n"
+        "- Use plain `assert` statements, not a testing framework's "
+        "custom assertion helpers.\n"
+        "- Some values below may already read as [REDACTED] — that is "
+        "expected, treat it as an opaque placeholder string, not a bug.\n"
+        "- Return ONLY the Python test code — no markdown fences, no "
+        "prose before or after.\n\n"
+        f"```python\n{function_source}\n```"
+    )
+    raw = ai_client.generate(prompt)
+    return _strip_code_fences(raw), secrets_redacted
+
+
+def _function_source(source_file: Path, function_name: str) -> str:
+    tree = ast.parse(source_file.read_text(encoding="utf-8"))
+    for node in ast.iter_child_nodes(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == function_name:
+            segment = ast.get_source_segment(source_file.read_text(encoding="utf-8"), node)
+            if segment:
+                return segment
+    return f"def {function_name}(...): ..."  # pragma: no cover — should be unreachable
+
+
+def _strip_code_fences(text: str) -> str:
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        lines = stripped.splitlines()
+        lines = lines[1:]  # drop opening ```python or ```
+        if lines and lines[-1].strip().startswith("```"):
+            lines = lines[:-1]
+        stripped = "\n".join(lines)
+    return stripped
+
+
+def _append_test_to_file(
+    test_file: Path, function_name: str, module_path: str, test_code: str
+) -> None:
+    """Append AI-generated test code to `test_file`, adding the AI
+    disclosure marker required by the reliability agent's EU AI Act
+    Article 50 check.
+
+    The import is inserted here rather than trusted from the model's own
+    output — the prompt asks for it, but correctness of the generated file
+    shouldn't depend on the model actually following that instruction. A
+    duplicate import line across multiple generated blocks in the same
+    file is harmless in Python, just redundant.
+    """
+    marker = "# AI-generated by ai-test-tool"
+    import_line = f"from {module_path} import {function_name}"
+    block = f"\n\n{import_line}\n{test_code}\n"
+
+    if not test_file.exists():
+        test_file.write_text(f"{marker}\nimport pytest\n{block}", encoding="utf-8")
         return
-    
-    # Read existing file
-    existing_content = test_file_path.read_text(encoding="utf-8")
-    
-    # Check if trips_overlap is already imported
-    if "trips_overlap" not in existing_content:
-        # Update import statement
-        existing_content = existing_content.replace(
-            "from app.trip_logic import is_day_within_trip, trip_duration_days",
-            "from app.trip_logic import is_day_within_trip, trip_duration_days, trips_overlap"
-        )
-    
-    # Append tests with disclosure marker (once at the beginning of the new content)
-    if "# AI-generated by ai-test-tool" not in existing_content:
-        # Add marker before the appended tests
-        test_code_with_marker = "\n\n# AI-generated by ai-test-tool" + test_code
-    else:
-        test_code_with_marker = test_code
-    
-    updated_content = existing_content + test_code_with_marker
-    test_file_path.write_text(updated_content, encoding="utf-8")
+
+    existing = _existing_content(test_file)
+    if marker not in existing:
+        block = f"\n\n{marker}{block}"
+
+    with test_file.open("a", encoding="utf-8") as f:
+        f.write(block)
+
+
+def _existing_content(test_file: Path) -> str:
+    return test_file.read_text(encoding="utf-8") if test_file.exists() else ""

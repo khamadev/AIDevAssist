@@ -53,10 +53,51 @@ No agent scores a person. Every agent scores a change.
   workflow gets the same explanation as one reading colored terminal output
   elsewhere.
 
-## Data minimization
+## AI model interaction and data minimization
 
-dev.ai's agents operate on the target repository's own files and git
-history. They do not collect, transmit, or retain personal data about
-contributors beyond what git commit metadata already contains (author name,
-email, timestamp), and that metadata is written only to the target repo's
-own `CHANGELOG.md` and local state files, never to a third party.
+Test-maintenance sends function source code to Claude (via `ai_client.py`)
+to generate tests — this is a real third-party data flow, not a
+theoretical one, and is scoped deliberately narrow:
+
+- Only the source of the specific untested function is sent, extracted via
+  `ast.get_source_segment` — never the whole file, never the whole diff,
+  never unrelated files in the repo.
+- Only functions in files that actually changed in the current commit (or
+  the file just saved) are ever considered — see
+  `test-maintenance.md`'s scoping rule. Nothing is sent proactively or on
+  a schedule.
+- No git commit metadata (author name, email, timestamps), no other
+  contributors' code, and no application runtime data (e.g. travel-planner
+  user records) is ever included in a prompt.
+- Before a function's source is sent to Claude, `secret_redaction.py` scans
+  it for AWS access key IDs, PEM private key blocks, bearer tokens, and
+  assignments to variables named like a secret (`api_key`, `password`,
+  `token`, etc., including type-annotated assignments) and replaces the
+  value with `[REDACTED]`. This runs unconditionally, inside the same
+  process, before the prompt is built — not as an opt-in flag.
+- Every redaction is visible, not silent: it's recorded per-function in
+  `details.generated[].secrets_redacted`, and surfaced in the printed
+  summary and the changelog entry the same way a human override is,
+  because "a secret was in this code and was redacted" is exactly the kind
+  of thing that shouldn't only be discoverable by re-reading the source
+  after the fact.
+
+Every other agent (hooks, reliability, documentation, notification)
+operates entirely on the target repository's own files and git history and
+sends nothing to any third party. Git commit metadata is written only to
+the target repo's own `CHANGELOG.md` and local state files under
+`.ai-test-tool/`.
+
+## Not yet addressed
+
+Stated plainly, rather than left implicit:
+
+- Secret redaction is regex-based, matching known patterns and naming
+  conventions (`secret_redaction.py`'s `_RULES`) — it has a real, expected
+  blind spot: a credential that doesn't match any pattern (an unfamiliar
+  naming convention, an unrecognized token format) passes through
+  unredacted. It is a mitigation, not a guarantee.
+- The model's output is trusted for test *content* (reliability.py verifies
+  it by execution) but not audited for the prompt sent to it — there is no
+  prompt-injection defense if a function's own source or docstring
+  contained adversarial text aimed at the model.

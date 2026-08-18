@@ -9,6 +9,12 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0.0"]
+# Only needed for test-maintenance's actual test generation. Kept optional
+# so installing and running the rest of the tool (hooks, reliability,
+# documentation, notification) never requires an Anthropic account — a repo
+# without ANTHROPIC_API_KEY set just gets a clear "AI unavailable" skip
+# reason instead of an ImportError.
+ai = ["anthropic>=0.40.0"]
 
 [project.scripts]
 ai-test-tool = "ai_test_tool.cli:main"

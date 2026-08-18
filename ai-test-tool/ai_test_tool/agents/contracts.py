@@ -44,9 +44,19 @@ class AgentReport:
 class TestMaintenanceResult:
     """Expected shape of the `details` field from the test-maintenance agent.
 
-    `generated_test_path` covers the common single-file case. If a commit
-    produces more than one test, also set `generated_test_paths` (plural)
-    so the reliability agent verifies all of them, not just one.
+    `generated` is one entry per function a test was actually written for:
+    `{"file": ..., "function": ..., "test_path": ...}`. `skipped` is one
+    entry per untested function that was found but not generated for
+    (e.g. the AI model was unavailable, or the per-run cap was hit):
+    `{"function": "path/to/file.py::function_name", "reason": ...}`.
+    `coverage_gaps` lists every untested function found in this dispatch's
+    changed files, generated or not — `"path/to/file.py::function_name"`
+    for each.
+
+    The agent also mirrors `generated`'s test paths into
+    `generated_test_paths` (plain list of strings) at the top level of
+    `details`, since that's the field reliability.py and cli.py's
+    `_stage_generated_files` already know how to read.
     """
 
     # Tells pytest not to try collecting this as a test class — its name
@@ -54,11 +64,9 @@ class TestMaintenanceResult:
     # otherwise produces a harmless but noisy collection warning.
     __test__ = False
 
-    file: str
-    function: str
-    generated_test_path: str | None
-    status: Literal["generated", "updated", "skipped", "no_change_needed"]
-    generated_test_paths: list[str] = field(default_factory=list)
+    generated: list[dict[str, str]] = field(default_factory=list)
+    skipped: list[dict[str, str]] = field(default_factory=list)
+    coverage_gaps: list[str] = field(default_factory=list)
 
 
 @dataclass
