@@ -312,3 +312,93 @@ CHANGELOG.md            | 22 ++++++++++++++++++++++
  3 files changed, 24 insertions(+)
 ```
 
+## Mon Aug 17 00:33:39 2026 +0300 — Fix stale static asset caching (no-cache headers); fix Overpass 504s via multi-mirror fallback
+- Commit: `2140e64`
+- Author: MuhdKhamarullah
+- Changes:
+```
+CHANGELOG.md        | 11 +++++++++++
+ app/main.py         | 21 ++++++++++++++++++++-
+ app/services/poi.py | 42 +++++++++++++++++++++++++++++++-----------
+ tests/test_poi.py   | 22 +++++++++++++++++++++-
+ 4 files changed, 83 insertions(+), 13 deletions(-)
+```
+
+## Mon Aug 17 22:40:33 2026 +0300 — Add human-override mechanism for blocking results, document responsible-AI commitments
+- Commit: `777f456`
+- Author: MuhdKhamarullah
+- Changes:
+```
+ai-test-tool/RESPONSIBLE_AI.md                    | 62 ++++++++++++++++++++
+ ai-test-tool/ai_test_tool/agents/documentation.py | 10 +++-
+ ai-test-tool/ai_test_tool/cli.py                  | 28 ++++++++-
+ ai-test-tool/tests/test_cli_human_override.py     | 70 +++++++++++++++++++++++
+ 4 files changed, 167 insertions(+), 3 deletions(-)
+```
+
+## Tue Aug 18 09:51:00 2026 +0300 — Replace fixed-template test generation with generic AST-based scanning + real AI calls
+- Commit: `50b4cb3`
+- Author: MuhdKhamarullah
+- Changes:
+```
+ai-test-tool/.claude/agents/test-maintenance.md    |  96 +++++
+ ai-test-tool/README.md                             |  56 ++-
+ ai-test-tool/RESPONSIBLE_AI.md                     |  53 ++-
+ ai-test-tool/ai_test_tool/agents/contracts.py      |  24 +-
+ ai-test-tool/ai_test_tool/agents/plugins.py        |  11 +-
+ .../ai_test_tool/agents/test_maintenance.py        | 441 ++++++++++++---------
+ ai-test-tool/ai_test_tool/ai_client.py             |  56 +++
+ ai-test-tool/ai_test_tool/secret_redaction.py      |  59 +++
+ ai-test-tool/pyproject.toml                        |   6 +
+ ai-test-tool/tests/test_integration_pipeline.py    |  25 +-
+ ai-test-tool/tests/test_secret_redaction.py        |  70 ++++
+ ai-test-tool/tests/test_test_maintenance.py        | 271 +++++++++----
+ 12 files changed, 871 insertions(+), 297 deletions(-)
+```
+
+## Tue Aug 18 09:59:12 2026 +0300 — Fix hooks hardcoding a relative PYTHONPATH to this tool's own folder
+- Commit: `a08c9ec`
+- Author: MuhdKhamarullah
+- Changes:
+```
+ai-test-tool/ai_test_tool/hooks/install.py         | 23 ++++++++++++++++++++--
+ .../ai_test_tool/hooks/post-commit.template        |  5 ++++-
+ .../ai_test_tool/hooks/post-merge.template         |  5 ++++-
+ .../ai_test_tool/hooks/pre-commit.template         |  7 ++++++-
+ ai-test-tool/ai_test_tool/hooks/pre-push.template  |  5 ++++-
+ ai-test-tool/tests/test_hooks_install.py           | 14 +++++++++++++
+ 6 files changed, 53 insertions(+), 6 deletions(-)
+```
+
+## Tue Aug 18 10:17:39 2026 +0300 — Add full-repository scan to init, so test-maintenance does not only catch new gaps
+- Commit: `f8c6704`
+- Author: MuhdKhamarullah
+- Changes:
+```
+ai-test-tool/.claude/agents/documentation.md       |   7 +-
+ ai-test-tool/.claude/agents/notification.md        |  10 +-
+ ai-test-tool/.claude/agents/orchestration.md       |  37 ++++++--
+ ai-test-tool/.claude/agents/reliability.md         |  34 ++++---
+ ai-test-tool/.claude/agents/test-maintenance.md    |  75 +++++++++++----
+ ai-test-tool/README.md                             |  46 +++++++--
+ ai-test-tool/RESPONSIBLE_AI.md                     |  15 ++-
+ ai-test-tool/ai_test_tool/agents/contracts.py      |   2 +-
+ ai-test-tool/ai_test_tool/agents/plugins.py        |  17 +++-
+ .../ai_test_tool/agents/test_maintenance.py        |  69 +++++++++++---
+ ai-test-tool/ai_test_tool/cli.py                   |  46 ++++++++-
+ ai-test-tool/tests/test_cli_init_scan.py           | 103 +++++++++++++++++++++
+ ai-test-tool/tests/test_integration_pipeline.py    |  35 +++++++
+ ai-test-tool/tests/test_orchestrator.py            |  11 +++
+ ai-test-tool/tests/test_test_maintenance.py        |  73 +++++++++++++++
+ 15 files changed, 499 insertions(+), 81 deletions(-)
+```
+
+## Tue Aug 18 10:21:02 2026 +0300 — Reframe README around dev.ai as the primary tool, Travel Planner as its sample application
+- Commit: `345a000`
+- Author: MuhdKhamarullah
+- Changes:
+```
+README.md | 91 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++-------
+ 1 file changed, 81 insertions(+), 10 deletions(-)
+```
+
